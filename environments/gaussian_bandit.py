@@ -19,7 +19,8 @@ class GaussianBandit(BaseEnvironment):
                 raise ValueError(f"Number of means ({len(means)}) must match number of actions ({n_actions})")
             self.means = means
         else:
-            self.means = np.random.normal(0, 1, size=n_actions)
+            # Generate means with good separation
+            self.means = np.linspace(1, 5, n_actions)
             
         if stds is not None:
             # Convert stds to numpy array if it's a list
@@ -30,14 +31,16 @@ class GaussianBandit(BaseEnvironment):
                 raise ValueError("All standard deviations must be positive")
             self.stds = stds
         else:
-            self.stds = np.random.uniform(0.1, 1, size=n_actions)
+            # Use consistent standard deviation
+            self.stds = np.ones(n_actions)
             
         self.action_count = n_actions
         self._initial_means = np.copy(self.means)
         self._initial_stds = np.copy(self.stds)
         
-        # Store the optimal action index
+        # Store the optimal action index and value
         self._optimal_action = np.argmax(self.means)
+        self._optimal_mean = self.means[self._optimal_action]
         
     def pull(self, action):
         """
@@ -55,9 +58,13 @@ class GaussianBandit(BaseEnvironment):
         if not (0 <= action < self.action_count):
             raise ValueError(f"Action {action} is out of bounds. Must be between 0 and {self.action_count - 1}")
         
-        # Generate reward and ensure it's non-negative
+        # Generate reward from normal distribution
         reward = np.random.normal(self.means[action], self.stds[action])
-        return float(max(0, reward))  # Ensure non-negative rewards
+        
+        # Ensure reward is non-negative and bounded
+        reward = np.clip(reward, 0, self._optimal_mean * 2)
+        
+        return float(reward)
         
     def optimal_reward(self):
         """
@@ -66,7 +73,7 @@ class GaussianBandit(BaseEnvironment):
         Returns:
             float: The maximum mean among all actions.
         """
-        return float(self.means[self._optimal_action])
+        return float(self._optimal_mean)
         
     def step(self):
         """
@@ -80,4 +87,5 @@ class GaussianBandit(BaseEnvironment):
         """
         self.means = np.copy(self._initial_means)
         self.stds = np.copy(self._initial_stds)
-        self._optimal_action = np.argmax(self.means) 
+        self._optimal_action = np.argmax(self.means)
+        self._optimal_mean = self.means[self._optimal_action] 
