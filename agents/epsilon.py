@@ -1,6 +1,7 @@
 # bandits/epsilon.py
 import numpy as np
 from .base_agent import BaseAgent
+import os
 
 class EpsilonGreedyAgent(BaseAgent):
     """
@@ -69,3 +70,10 @@ class EpsilonGreedyAgent(BaseAgent):
     def name(self):
         """Returns the name of the agent, including the epsilon value."""
         return f"{self._name}(epsilon={self._epsilon})"
+
+agents = [
+    EpsilonGreedyAgent(epsilon=0.1),
+    UCBAgent(),
+    ThompsonSamplingAgent(),
+    LLMAgent(api_key=os.getenv('OPENAI_API_KEY'))  # Add LLM agent
+]
