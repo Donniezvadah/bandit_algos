@@ -3,12 +3,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 from environments.gaussian_bandit import GaussianBandit
 from environments.bernoulli_bandit import BernoulliBandit
-from agents.epsilon_greedy import EpsilonGreedyAgent
+from agents.epsilon import EpsilonGreedyAgent
 from agents.ucb import UCBAgent
 from agents.thompson import ThompsonSamplingAgent
 from agents.llm_agent import LLMAgent
 from utils.confidence import compute_confidence_interval
-from plots.plot_utils import plot_regret
+from plots.plot_utils import plot_regret_with_confidence
 import configparser
 import xml.etree.ElementTree as ET
 import os
@@ -124,18 +124,14 @@ def main():
     )
     
     # Plot results
-    plot_regret(
-        bernoulli_regrets, bernoulli_intervals,
-        [agent.name for agent in agents],
-        "Bernoulli Bandit Regret",
-        os.path.join(config['paths']['plots_dir'], 'bernoulli_regret.png')
+    plot_regret_with_confidence(
+        agents, bernoulli_regrets, bernoulli_intervals,
+        config, "Bernoulli"
     )
     
-    plot_regret(
-        gaussian_regrets, gaussian_intervals,
-        [agent.name for agent in agents],
-        "Gaussian Bandit Regret",
-        os.path.join(config['paths']['plots_dir'], 'gaussian_regret.png')
+    plot_regret_with_confidence(
+        agents, gaussian_regrets, gaussian_intervals,
+        config, "Gaussian"
     )
 
 if __name__ == "__main__":

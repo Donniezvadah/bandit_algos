@@ -17,7 +17,7 @@
         <random>1245</random>
     </seeds>
     <environments>
-        <n_actions>5</n_actions>
+        <n_actions>10</n_actions>
         <bernoulli>
             <probs>
                 <prob>0.1</prob>
@@ -25,6 +25,11 @@
                 <prob>0.3</prob>
                 <prob>0.4</prob>
                 <prob>0.5</prob>
+                <prob>0.6</prob>
+                <prob>0.7</prob>
+                <prob>0.8</prob>
+                <prob>0.9</prob>
+                <prob>1.0</prob>
             </probs>
         </bernoulli>
         <gaussian>
@@ -34,8 +39,18 @@
                 <mean>3.0</mean>
                 <mean>4.0</mean>
                 <mean>5.0</mean>
+                <mean>6.0</mean>
+                <mean>7.0</mean>
+                <mean>8.0</mean>
+                <mean>9.0</mean>
+                <mean>10.0</mean>
             </means>
             <stds>
+                <std>1.0</std>
+                <std>1.0</std>
+                <std>1.0</std>
+                <std>1.0</std>
+                <std>1.0</std>
                 <std>1.0</std>
                 <std>1.0</std>
                 <std>1.0</std>
