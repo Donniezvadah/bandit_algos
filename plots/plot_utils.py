@@ -11,6 +11,7 @@ def plot_regret_with_confidence(agents, regret, confidence_intervals, config, en
         confidence_intervals: Dictionary of confidence intervals
         config: Configuration dictionary
         env_name: Name of the environment (for file naming)
+        this is for us to plot all the agents 
     """
     plt.figure(figsize=(12, 8))
     
