@@ -2,6 +2,7 @@ import numpy as np
 import openai
 from .base_agent import BaseAgent
 import time
+import os
 
 class LLMAgent(BaseAgent):
     """
@@ -14,11 +15,10 @@ class LLMAgent(BaseAgent):
         Initialize the LLM agent.
         
         Args:
-            api_key (str): OpenAI API key. If None, will try to get from environment.
+            api_key (str): OpenAI API key. If None, will try to get from llm_api.txt.
             model (str): The OpenAI model to use.
         """
         super().__init__("LLM")
-        self.api_key = api_key
         self.model = model
         self._rewards = None
         self._counts = None
@@ -26,11 +26,16 @@ class LLMAgent(BaseAgent):
         self._reward_history = []
         self._context_window = 10  # Number of recent actions to include in context
         
-        # Initialize OpenAI client
-        if self.api_key:
-            openai.api_key = self.api_key
-        else:
-            raise ValueError("OpenAI API key is required for LLM agent")
+        # Try to get API key from file if not provided
+        if api_key is None:
+            try:
+                with open('llm_api.txt', 'r') as f:
+                    api_key = f.read().strip()
+            except FileNotFoundError:
+                raise ValueError("OpenAI API key not provided and llm_api.txt not found")
+        
+        self.api_key = api_key
+        openai.api_key = self.api_key
 
     def init_actions(self, n_actions):
         """

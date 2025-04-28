@@ -1,17 +1,14 @@
 # bandits/main.py
 import numpy as np
 import matplotlib.pyplot as plt
-from environments.gaussian_bandit import GaussianBandit
 from environments.bernoulli_bandit import BernoulliBandit
-from agents.epsilon import EpsilonGreedyAgent
-from agents.ucb import UCBAgent
-from agents.thompson import ThompsonSamplingAgent
 from agents.llm_agent import LLMAgent
 from utils.confidence import compute_confidence_interval
 from plots.plot_utils import plot_regret_with_confidence
 import configparser
 import xml.etree.ElementTree as ET
 import os
+from environments.gaussian_bandit import GaussianBandit
 
 def load_config():
     """Load configuration from XML file."""
@@ -37,58 +34,47 @@ def load_config():
             'n_actions': int(root.find('environments/n_actions').text),
             'bernoulli': {
                 'probs': [float(prob.text) for prob in root.findall('environments/bernoulli/probs/prob')]
-            },
-            'gaussian': {
-                'means': [float(mean.text) for mean in root.findall('environments/gaussian/means/mean')],
-                'stds': [float(std.text) for std in root.findall('environments/gaussian/stds/std')]
             }
         }
     }
     return config
 
-def run_simulation(env, agents, n_steps, n_trials, confidence_levels):
-    """Run the bandit simulation."""
-    n_agents = len(agents)
-    regrets = np.zeros((n_agents, n_trials, n_steps))
+def run_simulation(env, agent, n_steps, n_trials, confidence_levels):
+    """Run the bandit simulation with a single agent."""
+    regrets = np.zeros((n_trials, n_steps))
     
     for trial in range(n_trials):
         print(f"\nTrial {trial + 1}/{n_trials}")
         
-        # Reset environment and agents
+        # Reset environment and agent
         env.reset()
-        for agent in agents:
-            agent.init_actions(env.action_count)
+        agent.init_actions(env.action_count)
         
         # Run simulation
         for step in range(n_steps):
-            if (step + 1) % 100 == 0:
+            if (step + 1) % 10 == 0:  # Print more frequently
                 print(f"Step {step + 1}/{n_steps}", end='\r')
             
-            for i, agent in enumerate(agents): #remove for loop here and reduce complexity and simplify the def run_simulation (1 agent at a time)
-                #print action and reward here 
-                #Use epsilon = 0.1
-                #50 steps
-                
-                # Get action from agent
-                action = agent.get_action()
-                
-                # Get reward from environment
-                reward = env.pull(action)
-                
-                # Update agent
-                agent.update(action, reward)
-                
-                # Calculate regret
-                optimal_reward = env.optimal_reward()
-                regrets[i, trial, step] = optimal_reward - reward
+            # Get action from agent
+            action = agent.get_action()
+            
+            # Get reward from environment
+            reward = env.pull(action)
+            
+            # Print action and reward
+            print(f"Action: {action}, Reward: {reward}")
+            
+            # Update agent
+            agent.update(action, reward)
+            
+            # Calculate regret
+            optimal_reward = env.optimal_reward()
+            regrets[trial, step] = optimal_reward - reward
     
     # Calculate confidence intervals
     confidence_intervals = {}
     for level in confidence_levels:
-        confidence_intervals[level] = [
-            compute_confidence_interval(regrets[i], level)
-            for i in range(n_agents)
-        ]
+        confidence_intervals[level] = compute_confidence_interval(regrets, level)
     
     return regrets, confidence_intervals
 
@@ -99,44 +85,36 @@ def main():
     # Set random seeds
     np.random.seed(config['seeds']['numpy'])
     
-    # Create environments
+    # Create Bernoulli environment
     bernoulli_env = BernoulliBandit(probs=config['environments']['bernoulli']['probs'])
-    gaussian_env = GaussianBandit(
-        means=config['environments']['gaussian']['means'],
-        stds=config['environments']['gaussian']['stds']
-    )
     
-    # Create agents
-    agents = [
-        EpsilonGreedyAgent(epsilon=0.1),
-        UCBAgent(),
-        ThompsonSamplingAgent(),
-        LLMAgent(api_key=os.getenv('OPENAI_API_KEY'))  # Add LLM agent
-    ]
+    # Create LLM agent
+    agent = LLMAgent(model="gpt-4")  # Will automatically read API key from llm_api.txt
     
-    # Run simulations
-    print("Running Bernoulli environment simulation...")
-    bernoulli_regrets, bernoulli_intervals = run_simulation(
-        bernoulli_env, agents, config['simulation']['n_steps'],
-        config['simulation']['n_trials'], config['simulation']['confidence_levels']
-    )
-    
-    print("\nRunning Gaussian environment simulation...")
-    gaussian_regrets, gaussian_intervals = run_simulation(
-        gaussian_env, agents, config['simulation']['n_steps'],
+    # Run simulation
+    print("Running Bernoulli environment simulation with LLM agent...")
+    regrets, intervals = run_simulation(
+        bernoulli_env, agent, config['simulation']['n_steps'],
         config['simulation']['n_trials'], config['simulation']['confidence_levels']
     )
     
     # Plot results
     plot_regret_with_confidence(
-        agents, bernoulli_regrets, bernoulli_intervals,
+        [agent], regrets, intervals,
         config, "Bernoulli"
     )
-    
-    plot_regret_with_confidence(
-        agents, gaussian_regrets, gaussian_intervals,
-        config, "Gaussian"
-    )
+
+    # Create environment
+    env = GaussianBandit(n_actions=10)
+
+    # Generate configuration
+    means, stds = generate_configuration(n_actions=10)
+
+    # Set the environment parameters
+    env.set(means, stds)
+
+    # Use the environment
+    reward = env.pull(0)  # Pull first arm
 
 if __name__ == "__main__":
     main()
