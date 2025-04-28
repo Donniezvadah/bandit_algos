@@ -41,8 +41,4 @@ ENV/
 
 # OS specific
 .DS_Store
-Thumbs.db 
-
-.github/workflows
-.idea
-__pycache__
+Thumbs.db
