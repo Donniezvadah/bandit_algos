@@ -64,7 +64,11 @@ def run_simulation(env, agents, n_steps, n_trials, confidence_levels):
             if (step + 1) % 100 == 0:
                 print(f"Step {step + 1}/{n_steps}", end='\r')
             
-            for i, agent in enumerate(agents):
+            for i, agent in enumerate(agents): #remove for loop here and reduce complexity and simplify the def run_simulation (1 agent at a time)
+                #print action and reward here 
+                #Use epsilon = 0.1
+                #50 steps
+                
                 # Get action from agent
                 action = agent.get_action()
                 

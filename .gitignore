@@ -1,0 +1,44 @@
+# API keys and sensitive data
+llm_api.txt
+
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Python specific
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+.env
+.venv
+env/
+venv/
+ENV/
+
+# GitHub Actions
+.github/workflows/
+
+# OS specific
+.DS_Store
+Thumbs.db 

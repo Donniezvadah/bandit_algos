@@ -41,6 +41,9 @@ class GaussianBandit(BaseEnvironment):
             # Higher variance for arms with higher means to increase the challenge
             self.stds = np.linspace(0.5, 2.0, n_actions)
             
+            #Can remove line 21 to 40 and have more control on your experiments 
+            # remove rewards scale 
+            
         # Scale the rewards to ensure reasonable magnitudes
         self.means *= reward_scale
         self.stds *= reward_scale
@@ -56,7 +59,7 @@ class GaussianBandit(BaseEnvironment):
         # Store additional statistics for analysis
         self._total_pulls = np.zeros(n_actions)
         self._total_rewards = np.zeros(n_actions)
-        self._sum_squared_rewards = np.zeros(n_actions)
+        self._sum_squared_rewards = np.zeros(n_actions)  #lines 60 to 63 belong to the 
         
     def pull(self, action):
         """
@@ -101,7 +104,7 @@ class GaussianBandit(BaseEnvironment):
         
     def reset(self):
         """
-        Reset the environment to its initial state.
+        Reset the environment to its initial state. #Put everything to none 
         """
         self.means = np.copy(self._initial_means)
         self.stds = np.copy(self._initial_stds)
