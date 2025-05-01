@@ -114,7 +114,7 @@ def main():
     env.set(means, stds)
 
     # Use the environment
-    reward = env.pull(0)  # Pull first arm
+    reward = env.pull(0)  # Pull first arm and .....
 
 if __name__ == "__main__":
     main()
