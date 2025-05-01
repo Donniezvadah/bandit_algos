@@ -154,3 +154,5 @@ class GaussianBandit(BaseEnvironment):
             'empirical_means': empirical_means,
             'empirical_stds': empirical_stds
         } 
+        
+        #this is a comment 
