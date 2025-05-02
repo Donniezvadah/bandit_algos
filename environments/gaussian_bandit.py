@@ -109,12 +109,11 @@ class GaussianBandit(BaseEnvironment):
         """
         Reset the environment to its initial state.
         """
-        self.means = None
-        self.stds = None
-        self._initial_means = None
-        self._initial_stds = None
-        self._optimal_action = None
-        self._optimal_mean = None
+        if self._initial_means is not None and self._initial_stds is not None:
+            self.means = np.copy(self._initial_means)
+            self.stds = np.copy(self._initial_stds)
+            self._optimal_action = np.argmax(self.means)
+            self._optimal_mean = self.means[self._optimal_action]
         
     def step(self):
         """

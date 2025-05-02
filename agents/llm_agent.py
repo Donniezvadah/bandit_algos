@@ -1,22 +1,22 @@
 import numpy as np
-import openai
+from openai import OpenAI
 from .base_agent import BaseAgent
 import time
 import os
 
 class LLMAgent(BaseAgent):
     """
-    An agent that uses ChatGPT API to make decisions in the bandit environment.
+    An agent that uses OpenAI API to make decisions in the bandit environment.
     This agent maintains a history of actions and rewards to provide context to the LLM.
     """
 
-    def __init__(self, api_key=None, model="gpt-4"):
+    def __init__(self, api_key=None, model="o3-mini"):
         """
         Initialize the LLM agent.
         
         Args:
             api_key (str): OpenAI API key. If None, will try to get from llm_api.txt.
-            model (str): The OpenAI model to use.
+            model (str): The model to use.
         """
         super().__init__("LLM")
         self.model = model
@@ -32,10 +32,10 @@ class LLMAgent(BaseAgent):
                 with open('llm_api.txt', 'r') as f:
                     api_key = f.read().strip()
             except FileNotFoundError:
-                raise ValueError("OpenAI API key not provided and llm_api.txt not found")
+                raise ValueError("API key not provided and llm_api.txt not found")
         
         self.api_key = api_key
-        openai.api_key = self.api_key
+        self.client = OpenAI(api_key=self.api_key)
 
     def init_actions(self, n_actions):
         """
@@ -82,7 +82,7 @@ class LLMAgent(BaseAgent):
 
     def get_action(self):
         """
-        Choose an action using ChatGPT API.
+        Choose an action using OpenAI API.
         
         Returns:
             int: The index of the chosen action.
@@ -94,7 +94,7 @@ class LLMAgent(BaseAgent):
         if np.any(self._counts == 0):
             return np.argmin(self._counts)
 
-        # Generate prompt for ChatGPT
+        # Generate prompt for the model
         context = self._get_context_prompt()
         prompt = f"""You are playing a multi-armed bandit game. Your goal is to maximize cumulative reward.
 {context}
@@ -103,8 +103,9 @@ Based on this information, which action should you choose next?
 Return only the action number (0-{len(self._rewards)-1}) and a brief explanation."""
 
         try:
-            # Call ChatGPT API
-            response = openai.ChatCompletion.create(
+            print(f"\nCalling OpenAI API with model: {self.model}")
+            # Call OpenAI API
+            response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {"role": "system", "content": "You are an expert at playing multi-armed bandit games."},
@@ -113,19 +114,30 @@ Return only the action number (0-{len(self._rewards)-1}) and a brief explanation
                 temperature=0.7,
                 max_tokens=100
             )
+            print(f"API Response: {response}")
             
             # Parse response to get action
             response_text = response.choices[0].message.content
-            action = int(response_text.split()[0])  # Get first number in response
+            print(f"Response text: {response_text}")
+            try:
+                action = int(response_text.split()[0])  # Get first number in response
+                print(f"Parsed action: {action}")
+            except (ValueError, IndexError) as e:
+                print(f"Warning: Could not parse action from response: {response_text}")
+                print(f"Parse error: {e}")
+                action = np.argmin(self._counts)  # Fallback to least tried action
             
             # Validate action
             if not (0 <= action < len(self._rewards)):
+                print(f"Warning: Invalid action {action} received from LLM")
                 action = np.argmin(self._counts)  # Fallback to least tried action
             
             return action
             
         except Exception as e:
-            print(f"Error calling ChatGPT API: {e}")
+            print(f"Error calling OpenAI API: {str(e)}")
+            print(f"Error type: {type(e)}")
+            print(f"Error details: {e.__dict__}")
             # Fallback to UCB-like strategy
             means = self._rewards / (self._counts + 1e-6)
             exploration_bonus = np.sqrt(2 * np.log(len(self._action_history) + 1) / (self._counts + 1e-6))

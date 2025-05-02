@@ -1,7 +1,7 @@
 # bandits/thompson.py
 import numpy as np
 from .base_agent import BaseAgent
-# from abc import ABCMeta, abstractmethod, abstractproperty
+from abc import ABCMeta, abstractmethod, abstractproperty
 
 class ThompsonSamplingAgent(BaseAgent):
     """

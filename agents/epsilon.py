@@ -20,7 +20,7 @@ class EpsilonGreedyAgent(BaseAgent):
         if not (0 <= epsilon <= 1):
             raise ValueError("Epsilon must be between 0 and 1")
         self._epsilon = epsilon
-        self._successes = None  # Initialize successes and failures to None
+        self._successes = None
         self._failures = None
         self.environment_type = environment_type
 
@@ -31,10 +31,13 @@ class EpsilonGreedyAgent(BaseAgent):
         Args:
             n_actions (int): The number of possible actions.
         """
-        super().init_actions(n_actions)  # Call the parent's init_actions to initialize base attributes
+        super().init_actions(n_actions)
         if self.environment_type == 'bernoulli':
-            self._successes = np.zeros(n_actions)  # Number of successes for each action
-            self._failures = np.zeros(n_actions)   # Number of failures for each action
+            self._successes = np.zeros(n_actions)
+            self._failures = np.zeros(n_actions)
+        else:  # gaussian
+            self.rewards = np.zeros(n_actions)
+            self.counts = np.zeros(n_actions)
 
     def get_action(self):
         """
@@ -46,25 +49,17 @@ class EpsilonGreedyAgent(BaseAgent):
         if self.environment_type == 'bernoulli':
             if self._successes is None or self._failures is None:
                 raise ValueError("Agent has not been initialized. Call init_actions() first.")
-
             if np.random.random() < self._epsilon:
-                # Explore: choose a random action
                 return np.random.randint(len(self._successes))
             else:
-                # Exploit: choose the action with the highest empirical success rate
-                # Avoid division by zero by adding a small constant
                 q_values = self._successes / (self._successes + self._failures + 1e-6)
                 return np.argmax(q_values)
         else:  # gaussian
             if self.rewards is None or self.counts is None:
                 raise ValueError("Agent has not been initialized. Call init_actions() first.")
-
             if np.random.random() < self._epsilon:
-                # Explore: choose a random action
                 return np.random.randint(len(self.rewards))
             else:
-                # Exploit: choose the action with the highest empirical mean
-                # Avoid division by zero by adding a small constant
                 q_values = self.rewards / (self.counts + 1e-6)
                 return np.argmax(q_values)
 
@@ -82,7 +77,7 @@ class EpsilonGreedyAgent(BaseAgent):
             else:
                 self._failures[action] += 1
         else:  # gaussian
-            super().update(action, reward)  # Use the base class update method for Gaussian rewards
+            super().update(action, reward)
 
     @property
     def name(self):

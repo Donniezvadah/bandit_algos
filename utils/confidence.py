@@ -3,34 +3,29 @@ from scipy import stats
 
 def compute_confidence_interval(data, confidence_level=0.95):
     """
-    Compute confidence interval for cumulative regret using Hoeffding's inequality.
-    This provides tighter bounds for bandit problems with sub-linear regret.
-    Ensures non-negative bounds and proper sub-linear growth.
+    Compute confidence intervals for the given data.
     
     Args:
-        data (np.array): Array of cumulative regret data points
-        confidence_level (float): Confidence level (e.g., 0.95 for 95% CI)
+        data (np.ndarray): Array of shape (n_trials, n_steps) containing the data.
+        confidence_level (float): The confidence level (default: 0.95).
         
     Returns:
-        tuple: (lower_bound, upper_bound)
+        dict: Dictionary with confidence level as key and (lower_bound, upper_bound) as value
     """
-    n = len(data)
-    t = np.arange(1, n+1)  # Time steps
+    # Compute mean and standard error across trials for each step
+    mean = np.mean(data, axis=0)  # Shape: (n_steps,)
+    std = np.std(data, axis=0)  # Shape: (n_steps,)
+    n = data.shape[0]  # Number of trials
+    se = std / np.sqrt(n)  # Standard error
     
-    # For cumulative regret, we need to account for the fact that regret grows with time
-    # We use a sub-linear bound that grows as O(sqrt(t log t))
-    delta = 1 - confidence_level
+    # Compute critical value for the given confidence level
+    z = stats.norm.ppf((1 + confidence_level) / 2)
     
-    # Hoeffding's bound scaled by time
-    # The bound grows as sqrt(t log t) to match the expected regret growth
-    epsilon = np.sqrt(2 * t * np.log(2/delta))
+    # Compute confidence intervals
+    lower_bound = np.maximum(0, mean - z * se)  # Ensure non-negative
+    upper_bound = mean + z * se
     
-    # The confidence interval should be centered around the actual regret
-    # and grow sub-linearly with time
-    lower_bound = np.maximum(0, data - epsilon)  # Ensure non-negative
-    upper_bound = data + epsilon
-    
-    return lower_bound, upper_bound
+    return {f"{int(confidence_level*100)}%": (lower_bound, upper_bound)}
 
 def compute_regret_confidence_intervals(regret_data, confidence_levels=[0.95]):
     """
@@ -38,7 +33,7 @@ def compute_regret_confidence_intervals(regret_data, confidence_levels=[0.95]):
     
     Args:
         regret_data (dict): Dictionary of regret data for each agent
-        confidence_levels (list): List containing only the 95% confidence level
+        confidence_levels (list): List of confidence levels
         
     Returns:
         dict: Dictionary of confidence intervals for each agent
@@ -48,6 +43,6 @@ def compute_regret_confidence_intervals(regret_data, confidence_levels=[0.95]):
     for agent_name, regrets in regret_data.items():
         ci_data[agent_name] = {}
         for level in confidence_levels:
-            ci_data[agent_name]["95%"] = compute_confidence_interval(regrets, level)
+            ci_data[agent_name].update(compute_confidence_interval(regrets, level))
             
     return ci_data 
