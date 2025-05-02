@@ -10,7 +10,7 @@ class LLMAgent(BaseAgent):
     This agent maintains a history of actions and rewards to provide context to the LLM.
     """
 
-    def __init__(self, api_key=None, model="gpt-3.5-turbo"):
+    def __init__(self, api_key=None, model="o3-mini"):
         """
         Initialize the LLM agent.
         

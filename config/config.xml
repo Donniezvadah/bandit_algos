@@ -6,8 +6,8 @@
         <environments_dir>environments</environments_dir>
     </paths>
     <simulation>
-        <n_steps>1000</n_steps>
-        <n_trials>25</n_trials>
+        <n_steps>300</n_steps>
+        <n_trials>2</n_trials>
         <confidence_levels>
             <level>0.95</level>
         </confidence_levels>

@@ -57,6 +57,7 @@ def run_simulation(env, agent, n_steps, n_trials, confidence_levels):
     """Run the bandit simulation with a single agent."""
     print(f"\nStarting simulation for {agent.name}...")
     regrets = np.zeros((n_trials, n_steps))
+    cumulative_regrets = np.zeros((n_trials, n_steps))
     
     for trial in range(n_trials):
         print(f"\nTrial {trial + 1}/{n_trials}")
@@ -92,17 +93,21 @@ def run_simulation(env, agent, n_steps, n_trials, confidence_levels):
             # Calculate regret
             optimal_reward = env.optimal_reward()
             regrets[trial, step] = optimal_reward - reward
+            if step == 0:
+                cumulative_regrets[trial, step] = regrets[trial, step]
+            else:
+                cumulative_regrets[trial, step] = cumulative_regrets[trial, step-1] + regrets[trial, step]
     
     # Calculate confidence intervals
     print("Computing confidence intervals...")
     confidence_intervals = {}
     for level in confidence_levels:
         print(f"Computing {level*100}% confidence interval...")
-        ci = compute_confidence_interval(regrets, level)
+        ci = compute_confidence_interval(cumulative_regrets, level)
         confidence_intervals.update(ci)
         print(f"Confidence interval for {level*100}%: {ci}")
     
-    return regrets, confidence_intervals
+    return cumulative_regrets, confidence_intervals
 
 def main():
     print("Starting main function...")
@@ -182,7 +187,7 @@ def main():
             EpsilonGreedyAgent(epsilon=0.1, environment_type='gaussian'),
             UCBAgent(),
             ThompsonSamplingAgent(environment_type='gaussian'),
-            LLMAgent(model="gpt-3.5-turbo")
+            LLMAgent(model="o3-mini")
         ]
         print(f"Updated agents for Gaussian environment")
         

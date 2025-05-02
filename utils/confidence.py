@@ -3,7 +3,7 @@ from scipy import stats
 
 def compute_confidence_interval(data, confidence_level=0.95):
     """
-    Compute confidence intervals for the given data.
+    Compute confidence intervals for the given data (should be cumulative regret).
     
     Args:
         data (np.ndarray): Array of shape (n_trials, n_steps) containing the data.
@@ -29,7 +29,7 @@ def compute_confidence_interval(data, confidence_level=0.95):
 
 def compute_regret_confidence_intervals(regret_data, confidence_levels=[0.95]):
     """
-    Compute confidence intervals for regret data.
+    Compute confidence intervals for cumulative regret data.
     
     Args:
         regret_data (dict): Dictionary of regret data for each agent
