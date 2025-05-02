@@ -10,13 +10,13 @@ class LLMAgent(BaseAgent):
     This agent maintains a history of actions and rewards to provide context to the LLM.
     """
 
-    def __init__(self, api_key=None, model="o3-mini"):
+    def __init__(self, api_key=None, model="gpt-3.5-turbo"):
         """
         Initialize the LLM agent.
         
         Args:
             api_key (str): OpenAI API key. If None, will try to get from llm_api.txt.
-            model (str): The model to use.
+            model (str): The model to use. Default is "gpt-3.5-turbo".
         """
         super().__init__("LLM")
         self.model = model
@@ -34,8 +34,16 @@ class LLMAgent(BaseAgent):
             except FileNotFoundError:
                 raise ValueError("API key not provided and llm_api.txt not found")
         
+        if not api_key:
+            raise ValueError("API key is empty. Please provide a valid OpenAI API key.")
+        
         self.api_key = api_key
-        self.client = OpenAI(api_key=self.api_key)
+        try:
+            self.client = OpenAI(api_key=self.api_key)
+            # Test the API connection
+            self.client.models.list()
+        except Exception as e:
+            raise ValueError(f"Failed to initialize OpenAI client: {str(e)}")
 
     def init_actions(self, n_actions):
         """

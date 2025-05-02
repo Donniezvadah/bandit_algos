@@ -98,67 +98,133 @@ def run_simulation(env, agent, n_steps, n_trials, confidence_levels):
     confidence_intervals = {}
     for level in confidence_levels:
         print(f"Computing {level*100}% confidence interval...")
-        confidence_intervals[level] = compute_confidence_interval(regrets, level)
-        print(f"Confidence interval for {level*100}%: {confidence_intervals[level]}")
+        ci = compute_confidence_interval(regrets, level)
+        confidence_intervals.update(ci)
+        print(f"Confidence interval for {level*100}%: {ci}")
     
     return regrets, confidence_intervals
 
 def main():
     print("Starting main function...")
-    # Load configuration
-    config = load_config()
-    
-    # Set random seeds
-    print("Setting random seeds...")
-    np.random.seed(config['seeds']['numpy'])
-    
-    # Test Gaussian environment with all agents
-    print("\nTesting Gaussian environment with all agents...")
-    env = GaussianBandit(n_actions=10)
-    
-    # Generate means and standard deviations for the Gaussian environment
-    means = np.array([float(mean) for mean in config['environments']['gaussian']['means']])
-    stds = np.array([float(std) for std in config['environments']['gaussian']['stds']])
-    print(f"Means: {means}")
-    print(f"Stds: {stds}")
-    env.set(means, stds)
-    
-    # Initialize agents
-    print("Initializing agents...")
-    agents = [
-        EpsilonGreedyAgent(epsilon=0.1, environment_type='gaussian'),
-        UCBAgent(),
-        ThompsonSamplingAgent(environment_type='gaussian'),
-        LLMAgent(model="o3-mini")
-    ]
-    
-    # Run simulations for each agent
-    print("Starting simulations...")
-    all_regrets = {}
-    all_intervals = {}
-    
-    for agent in agents:
-        print(f"\nTesting {agent.name}...")
-        regrets, intervals = run_simulation(
-            env, agent, config['simulation']['n_steps'],
-            config['simulation']['n_trials'], config['simulation']['confidence_levels']
-        )
-        all_regrets[agent.name] = regrets
-        all_intervals[agent.name] = intervals
-        print(f"Completed simulation for {agent.name}")
-        print(f"Regrets shape: {regrets.shape}")
-        print(f"Intervals keys: {intervals.keys()}")
-    
-    # Plot results
-    print("Plotting results...")
-    print(f"Number of agents: {len(agents)}")
-    print(f"Regrets keys: {all_regrets.keys()}")
-    print(f"Intervals keys: {all_intervals.keys()}")
-    plot_regret_with_confidence(
-        agents, all_regrets, all_intervals,
-        config, "Gaussian"
-    )
-    print("Done!")
+    try:
+        # Load configuration
+        print("Loading configuration...")
+        config = load_config()
+        print("Configuration loaded successfully")
+        
+        # Set random seeds
+        print("Setting random seeds...")
+        np.random.seed(config['seeds']['numpy'])
+        print(f"Random seed set to: {config['seeds']['numpy']}")
+        
+        # Initialize agents
+        print("Initializing agents...")
+        agents = [
+            EpsilonGreedyAgent(epsilon=0.1, environment_type='bernoulli'),
+            UCBAgent(),
+            ThompsonSamplingAgent(environment_type='bernoulli'),
+            LLMAgent(model="gpt-3.5-turbo")
+        ]
+        print(f"Initialized {len(agents)} agents")
+        
+        # Test Bernoulli environment
+        print("\nTesting Bernoulli environment with all agents...")
+        probs = np.array([float(prob) for prob in config['environments']['bernoulli']['probs']])
+        print(f"Probabilities: {probs}")
+        env = BernoulliBandit(n_actions=10, probs=probs)
+        print("Bernoulli environment initialized")
+        
+        # Run simulations for Bernoulli environment
+        print("Starting Bernoulli simulations...")
+        all_regrets_bernoulli = {}
+        all_intervals_bernoulli = {}
+        
+        for agent in agents:
+            print(f"\nTesting {agent.name}...")
+            try:
+                regrets, intervals = run_simulation(
+                    env, agent, config['simulation']['n_steps'],
+                    config['simulation']['n_trials'], config['simulation']['confidence_levels']
+                )
+                all_regrets_bernoulli[agent.name] = regrets
+                all_intervals_bernoulli[agent.name] = intervals
+                print(f"Completed simulation for {agent.name}")
+                print(f"Regrets shape: {regrets.shape}")
+                print(f"Intervals keys: {intervals.keys()}")
+            except Exception as e:
+                print(f"Error in simulation for {agent.name}: {str(e)}")
+                print(f"Error type: {type(e)}")
+                continue
+        
+        # Plot Bernoulli results
+        print("Plotting Bernoulli results...")
+        try:
+            plot_regret_with_confidence(
+                agents, all_regrets_bernoulli, all_intervals_bernoulli,
+                config, "Bernoulli"
+            )
+            print("Bernoulli plots saved successfully")
+        except Exception as e:
+            print(f"Error plotting Bernoulli results: {str(e)}")
+        
+        # Test Gaussian environment
+        print("\nTesting Gaussian environment with all agents...")
+        env = GaussianBandit(n_actions=10)
+        means = np.array([float(mean) for mean in config['environments']['gaussian']['means']])
+        stds = np.array([float(std) for std in config['environments']['gaussian']['stds']])
+        print(f"Means: {means}")
+        print(f"Stds: {stds}")
+        env.set(means, stds)
+        print("Gaussian environment initialized")
+        
+        # Update agents for Gaussian environment
+        agents = [
+            EpsilonGreedyAgent(epsilon=0.1, environment_type='gaussian'),
+            UCBAgent(),
+            ThompsonSamplingAgent(environment_type='gaussian'),
+            LLMAgent(model="gpt-3.5-turbo")
+        ]
+        print(f"Updated agents for Gaussian environment")
+        
+        # Run simulations for Gaussian environment
+        print("Starting Gaussian simulations...")
+        all_regrets_gaussian = {}
+        all_intervals_gaussian = {}
+        
+        for agent in agents:
+            print(f"\nTesting {agent.name}...")
+            try:
+                regrets, intervals = run_simulation(
+                    env, agent, config['simulation']['n_steps'],
+                    config['simulation']['n_trials'], config['simulation']['confidence_levels']
+                )
+                all_regrets_gaussian[agent.name] = regrets
+                all_intervals_gaussian[agent.name] = intervals
+                print(f"Completed simulation for {agent.name}")
+                print(f"Regrets shape: {regrets.shape}")
+                print(f"Intervals keys: {intervals.keys()}")
+            except Exception as e:
+                print(f"Error in simulation for {agent.name}: {str(e)}")
+                print(f"Error type: {type(e)}")
+                continue
+        
+        # Plot Gaussian results
+        print("Plotting Gaussian results...")
+        try:
+            plot_regret_with_confidence(
+                agents, all_regrets_gaussian, all_intervals_gaussian,
+                config, "Gaussian"
+            )
+            print("Gaussian plots saved successfully")
+        except Exception as e:
+            print(f"Error plotting Gaussian results: {str(e)}")
+        
+        print("Done!")
+    except Exception as e:
+        print(f"Error in main function: {str(e)}")
+        print(f"Error type: {type(e)}")
+        print(f"Error details: {e.__dict__}")
+        raise
 
 if __name__ == "__main__":
     main()

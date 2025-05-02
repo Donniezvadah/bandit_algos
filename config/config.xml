@@ -1,20 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <config>
     <paths>
-        <plots_dir>plots/</plots_dir>
-        <agents_dir>agents/</agents_dir>
-        <environments_dir>environments/</environments_dir>
+        <plots_dir>plots</plots_dir>
+        <agents_dir>agents</agents_dir>
+        <environments_dir>environments</environments_dir>
     </paths>
     <simulation>
-        <n_steps>25</n_steps>
-        <n_trials>10</n_trials>
+        <n_steps>1000</n_steps>
+        <n_trials>25</n_trials>
         <confidence_levels>
             <level>0.95</level>
         </confidence_levels>
     </simulation>
     <seeds>
-        <numpy>1245</numpy>
-        <random>1245</random>
+        <numpy>42</numpy>
+        <random>42</random>
     </seeds>
     <environments>
         <n_actions>10</n_actions>
@@ -34,28 +34,28 @@
         </bernoulli>
         <gaussian>
             <means>
+                <mean>0.1</mean>
+                <mean>0.2</mean>
+                <mean>0.3</mean>
+                <mean>0.4</mean>
+                <mean>0.5</mean>
+                <mean>0.6</mean>
+                <mean>0.7</mean>
+                <mean>0.8</mean>
+                <mean>0.9</mean>
                 <mean>1.0</mean>
-                <mean>2.0</mean>
-                <mean>3.0</mean>
-                <mean>4.0</mean>
-                <mean>5.0</mean>
-                <mean>6.0</mean>
-                <mean>7.0</mean>
-                <mean>8.0</mean>
-                <mean>9.0</mean>
-                <mean>10.0</mean>
             </means>
             <stds>
-                <std>1.0</std>
-                <std>1.0</std>
-                <std>1.0</std>
-                <std>1.0</std>
-                <std>1.0</std>
-                <std>1.0</std>
-                <std>1.0</std>
-                <std>1.0</std>
-                <std>1.0</std>
-                <std>1.0</std>
+                <std>0.1</std>
+                <std>0.1</std>
+                <std>0.1</std>
+                <std>0.1</std>
+                <std>0.1</std>
+                <std>0.1</std>
+                <std>0.1</std>
+                <std>0.1</std>
+                <std>0.1</std>
+                <std>0.1</std>
             </stds>
         </gaussian>
     </environments>
