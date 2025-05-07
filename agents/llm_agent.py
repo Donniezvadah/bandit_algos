@@ -168,3 +168,5 @@ Return only the action number (0-{len(self._rewards)-1}) and a brief explanation
     def name(self):
         """Returns the name of the agent."""
         return f"{self._name}({self.model})" 
+    
+    
