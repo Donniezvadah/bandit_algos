@@ -10,13 +10,13 @@ class LLMAgent(BaseAgent):
     This agent maintains a history of actions and rewards to provide context to the LLM.
     """
 
-    def __init__(self, api_key=None, model="o3-mini"):
+    def __init__(self, api_key=None, model="gpt-4.1-nano"):
         """
         Initialize the LLM agent.
         
         Args:
             api_key (str): OpenAI API key. If None, will try to get from llm_api.txt.
-            model (str): The model to use. Default is "gpt-3.5-turbo".
+            model (str): The model to use. Default is "gpt-4.1-nano".
         """
         super().__init__("LLM")
         self.model = model
@@ -120,7 +120,7 @@ Return only the action number (0-{len(self._rewards)-1}) and a brief explanation
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.7,
-                max_tokens=100
+                max_tokens=50
             )
             print(f"API Response: {response}")
             
