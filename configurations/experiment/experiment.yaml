@@ -1,7 +1,7 @@
 experiment:
   output_dir: output
-  n_steps: 500
-  n_runs: 20
+  n_steps: 50
+  n_runs: 5
   seed: 0
 seeds:
   numpy: 0

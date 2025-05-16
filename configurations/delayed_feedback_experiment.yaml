@@ -2,9 +2,9 @@ experiment:
   output_dir: delayed_feedback/plots
   delays: [1, 3, 10, 32, 100, 316, 1000]
   n_arms: 5
-  n_runs: 20
-  horizon: 10000
+  n_runs: 3
+  horizon: 5
   seed: 42
 
-bernoulli_agent_names: [epsilon_greedy, ucb, thompson_sampling, kl_ucb]
-gaussian_agent_names: [gaussian_epsilon_greedy, gaussian_ucb, gaussian_thompson_sampling] 
+bernoulli_agent_names: [epsilon_greedy, ucb, thompson_sampling, kl_ucb, llm_agentV2]
+gaussian_agent_names: [gaussian_epsilon_greedy, gaussian_ucb, gaussian_thompson_sampling, llm_agentV2] 

@@ -10,7 +10,7 @@ class LLMAgent(BaseAgent):
     Implements regret tracking, softmax policy, and importance-weighted updates for bandit feedback.
     """
 
-    def __init__(self, api_key=None, model="gpt-4"):  # Use a strong model for strategic reasoning
+    def __init__(self, api_key=None, model="gpt-4.1-nano"):  # Use a strong model for strategic reasoning
         super().__init__("LLM")
         self.model = model
         self._rewards = None
