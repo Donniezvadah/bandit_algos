@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import os
 import numpy as np
+import matplotlib as mpl
 
 # Helper to get base agent name for color mapping
 # (e.g., EpsilonGreedy from EpsilonGreedy(epsilon=0.1, bernoulli))
@@ -22,11 +23,20 @@ def plot_regret_with_confidence(agents, regret, confidence_intervals, config, en
         plt.figure(figsize=(12, 8))
         
         # Define colors for each agent (use hex for easy alpha adjustment)
+        palette = mpl.colormaps['tab10']
+        agent_names = [
+            'EpsilonGreedy', 'UCB', 'ThompsonSampling', 'KL-UCB',
+            'GaussianEpsilonGreedy', 'GaussianUCB', 'GaussianThompsonSampling'
+        ]
         colors = {
-            'EpsilonGreedy': '#1f77b4',  # blue
-            'UCB': '#2ca02c',           # green
-            'ThompsonSampling': '#d62728', # red
-            'LLM': '#9467bd'           # purple
+            'GaussianThompsonSampling': '#d62728',  # red
+            'GaussianEpsilonGreedy': '#ff7f0e',    # orange
+            'GaussianUCB': '#1f77b4',              # blue
+            # fallback for other agents
+            'EpsilonGreedy': '#ff7f0e',
+            'UCB': '#1f77b4',
+            'ThompsonSampling': '#d62728',
+            'KL-UCB': '#8c564b',
         }
         
         for agent in agents:

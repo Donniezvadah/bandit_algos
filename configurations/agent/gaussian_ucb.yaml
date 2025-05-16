@@ -1,0 +1,4 @@
+name: gaussian_ucb
+n_arms: 5
+c: 2
+seed: 42 

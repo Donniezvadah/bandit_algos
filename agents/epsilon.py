@@ -23,6 +23,7 @@ class EpsilonGreedyAgent(BaseAgent):
         self._successes = None
         self._failures = None
         self.environment_type = environment_type
+        self.t = 0  # Add time step counter
 
     def init_actions(self, n_actions):
         """
@@ -46,10 +47,13 @@ class EpsilonGreedyAgent(BaseAgent):
         Returns:
             int: The index of the chosen action.
         """
+        self.t += 1  # Increment time step
         if self.environment_type == 'bernoulli':
             if self._successes is None or self._failures is None:
                 raise ValueError("Agent has not been initialized. Call init_actions() first.")
-            if np.random.random() < self._epsilon:
+            # Decaying epsilon: epsilon = 1/sqrt(t)
+            current_epsilon = min(1.0, 1.0 / np.sqrt(self.t))
+            if np.random.random() < current_epsilon:
                 return np.random.randint(len(self._successes))
             else:
                 q_values = self._successes / (self._successes + self._failures + 1e-6)

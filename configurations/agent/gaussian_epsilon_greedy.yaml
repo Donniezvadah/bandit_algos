@@ -1,0 +1,4 @@
+name: gaussian_epsilon_greedy
+n_arms: 5
+epsilon: 0.1
+seed: 42 

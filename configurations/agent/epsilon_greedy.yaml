@@ -1,0 +1,9 @@
+name: epsilon_greedy
+n_arms: 5
+epsilon: 0.1
+decay:
+  enabled: true
+  type: exponential  # or 'linear'
+  rate: 0.99         # Only used if enabled
+  min_epsilon: 0.01
+seed: 42 

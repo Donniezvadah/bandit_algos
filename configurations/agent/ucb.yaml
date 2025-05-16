@@ -1,0 +1,4 @@
+name: ucb
+n_arms: 5
+c: 3
+seed: 42 

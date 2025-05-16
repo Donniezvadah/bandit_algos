@@ -1,0 +1,8 @@
+name: llm_agent
+n_arms: 5
+api_key: null
+model: o3-mini
+prompt_template: null  # Use default if null
+horizon: 20
+max_tokens: 100
+seed: 42 

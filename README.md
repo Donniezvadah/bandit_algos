@@ -149,14 +149,37 @@ The code is organized into distinct modules to improve readability, maintainabil
 
 *   **`tests/test_agents.py`:** Contains unit tests to verify the basic functionality of the agent implementations.  These tests ensure that the agents are correctly selecting actions, updating their internal state, and handling edge cases.
 
+## Configuration
+
+Configuration files are now stored in the `configurations/` folder, using YAML format for clarity and flexibility. The structure is as follows:
+
+- `configurations/config.yaml`: Main configuration file with defaults.
+- `configurations/agent/`: Agent configuration files (e.g., `epsilon_greedy.yaml`, `ucb.yaml`, etc.).
+- `configurations/environment/`: Environment configuration files (e.g., `bernoulli_env.yaml`, `gaussian_env.yaml`).
+- `configurations/experiment/`: Experiment configuration files (e.g., `experiment.yaml`).
+
+You can modify these YAML files to change the experiment setup, agent parameters, or environment details.
+
 ## Dependencies
 
-*   Python 3.12.4
-*   numpy
-*   pandas
-*   matplotlib
+* Python 3.12.4
+* numpy
+* pandas
+* matplotlib
+* omegaconf
 
 To install the dependencies, run:
 
 ```bash
-pip install numpy pandas matplotlib
+pip install -r requirements.txt
+```
+
+## Running the Project
+
+Simply run:
+
+```bash
+python main.py
+```
+
+The project will use the YAML configuration files in `configurations/` to set up and run the experiments.

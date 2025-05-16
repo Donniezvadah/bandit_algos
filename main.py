@@ -9,48 +9,34 @@ from agents.ucb import UCBAgent
 from agents.thompson import ThompsonSamplingAgent
 from utils.confidence import compute_confidence_interval
 from plots.plot_utils import plot_regret_with_confidence
-import configparser
-import xml.etree.ElementTree as ET
 import os
 import sys
+from omegaconf import OmegaConf
+from agents.gaussian_epsilon_greedy import GaussianEpsilonGreedyAgent
+from agents.gaussian_ucb import GaussianUCBAgent
+from agents.gaussian_thompson_sampling import GaussianThompsonSamplingAgent
+from agents.ucb_kl import KLUCBAgent
 
 def load_config():
-    """Load configuration from XML file."""
-    print("Loading configuration...")
+    """
+    Load configuration from YAML files using OmegaConf.
+    Returns a merged configuration dictionary.
+    """
     try:
-        tree = ET.parse('config/config.xml')
-        root = tree.getroot()
-        
-        config = {
-            'paths': {
-                'plots_dir': root.find('paths/plots_dir').text,
-                'agents_dir': root.find('paths/agents_dir').text,
-                'environments_dir': root.find('paths/environments_dir').text
-            },
-            'simulation': {
-                'n_steps': int(root.find('simulation/n_steps').text),
-                'n_trials': int(root.find('simulation/n_trials').text),
-                'confidence_levels': [float(level.text) for level in root.findall('simulation/confidence_levels/level')]
-            },
-            'seeds': {
-                'numpy': int(root.find('seeds/numpy').text),
-                'random': int(root.find('seeds/random').text)
-            },
-            'environments': {
-                'n_actions': int(root.find('environments/n_actions').text),
-                'bernoulli': {
-                    'probs': [float(prob.text) for prob in root.findall('environments/bernoulli/probs/prob')]
-                },
-                'gaussian': {
-                    'means': [float(mean.text) for mean in root.findall('environments/gaussian/means/mean')],
-                    'stds': [float(std.text) for std in root.findall('environments/gaussian/stds/std')]
-                }
-            }
-        }
-        print("Configuration loaded successfully")
-        return config
+        # Load the main config file
+        config = OmegaConf.load('configurations/config.yaml')
+        # Load experiment config
+        experiment_cfg = OmegaConf.load('configurations/experiment/experiment.yaml')
+        # Load agent config (default: epsilon_greedy)
+        agent_cfg = OmegaConf.load('configurations/agent/epsilon_greedy.yaml')
+        # Load both environment configs
+        bernoulli_env_cfg = OmegaConf.load('configurations/environment/bernoulli_env.yaml')
+        gaussian_env_cfg = OmegaConf.load('configurations/environment/gaussian_env.yaml')
+        # Merge all configs (default: Bernoulli)
+        merged = OmegaConf.merge(config, experiment_cfg, agent_cfg, bernoulli_env_cfg)
+        return OmegaConf.to_container(merged, resolve=True), bernoulli_env_cfg, gaussian_env_cfg
     except Exception as e:
-        print(f"Error loading configuration: {e}")
+        print(f"Error loading YAML configuration: {e}")
         sys.exit(1)
 
 def run_simulation(env, agent, n_steps, n_trials, confidence_levels):
@@ -114,7 +100,7 @@ def main():
     try:
         # Load configuration
         print("Loading configuration...")
-        config = load_config()
+        config, bernoulli_env_cfg, gaussian_env_cfg = load_config()
         print("Configuration loaded successfully")
         
         # Set random seeds
@@ -122,22 +108,21 @@ def main():
         np.random.seed(config['seeds']['numpy'])
         print(f"Random seed set to: {config['seeds']['numpy']}")
         
-        # Initialize agents
-        print("Initializing agents...")
+        # Test Bernoulli environment
+        print("\nTesting Bernoulli environment with all agents...")
+        probs = np.array([float(prob) for prob in bernoulli_env_cfg['probabilities']])
+        print(f"Probabilities: {probs}")
+        env = BernoulliBandit(n_actions=len(probs), probs=probs)
+        print("Bernoulli environment initialized")
+        # Initialize agents (after probs is defined)
         agents = [
             EpsilonGreedyAgent(epsilon=0.1, environment_type='bernoulli'),
             UCBAgent(),
+            KLUCBAgent(n_arms=len(probs)),
             ThompsonSamplingAgent(environment_type='bernoulli'),
-            LLMAgent(model="gpt-3.5-turbo")
+            # LLMAgent(model="gpt-3.5-turbo")  # Skipped for now
         ]
         print(f"Initialized {len(agents)} agents")
-        
-        # Test Bernoulli environment
-        print("\nTesting Bernoulli environment with all agents...")
-        probs = np.array([float(prob) for prob in config['environments']['bernoulli']['probs']])
-        print(f"Probabilities: {probs}")
-        env = BernoulliBandit(n_actions=10, probs=probs)
-        print("Bernoulli environment initialized")
         
         # Run simulations for Bernoulli environment
         print("Starting Bernoulli simulations...")
@@ -148,8 +133,8 @@ def main():
             print(f"\nTesting {agent.name}...")
             try:
                 regrets, intervals = run_simulation(
-                    env, agent, config['simulation']['n_steps'],
-                    config['simulation']['n_trials'], config['simulation']['confidence_levels']
+                    env, agent, config['experiment']['n_steps'],
+                    config['experiment']['n_runs'], config.get('confidence_levels', [0.95])
                 )
                 all_regrets_bernoulli[agent.name] = regrets
                 all_intervals_bernoulli[agent.name] = intervals
@@ -174,9 +159,9 @@ def main():
         
         # Test Gaussian environment
         print("\nTesting Gaussian environment with all agents...")
-        env = GaussianBandit(n_actions=10)
-        means = np.array([float(mean) for mean in config['environments']['gaussian']['means']])
-        stds = np.array([float(std) for std in config['environments']['gaussian']['stds']])
+        means = np.array([float(mean) for mean in gaussian_env_cfg['means']])
+        stds = np.array([float(std) for std in gaussian_env_cfg['stds']])
+        env = GaussianBandit(n_actions=len(means))
         print(f"Means: {means}")
         print(f"Stds: {stds}")
         env.set(means, stds)
@@ -184,10 +169,10 @@ def main():
         
         # Update agents for Gaussian environment
         agents = [
-            EpsilonGreedyAgent(epsilon=0.1, environment_type='gaussian'),
-            UCBAgent(),
-            ThompsonSamplingAgent(environment_type='gaussian'),
-            LLMAgent(model="o3-mini")
+            GaussianEpsilonGreedyAgent(n_arms=len(means), epsilon=0.1),
+            GaussianUCBAgent(n_arms=len(means)),
+            GaussianThompsonSamplingAgent(n_arms=len(means)),
+            # LLMAgent(model="o3-mini")  # Skipped for now
         ]
         print(f"Updated agents for Gaussian environment")
         
@@ -200,8 +185,8 @@ def main():
             print(f"\nTesting {agent.name}...")
             try:
                 regrets, intervals = run_simulation(
-                    env, agent, config['simulation']['n_steps'],
-                    config['simulation']['n_trials'], config['simulation']['confidence_levels']
+                    env, agent, config['experiment']['n_steps'],
+                    config['experiment']['n_runs'], config.get('confidence_levels', [0.95])
                 )
                 all_regrets_gaussian[agent.name] = regrets
                 all_intervals_gaussian[agent.name] = intervals

@@ -43,7 +43,7 @@ class UCBAgent(BaseAgent):
             return np.argmin(self._counts)
 
         means = self._rewards / (self._counts + 1e-6)
-        exploration_bonus = np.sqrt(2 * np.log(self._total_steps + 1) / (self._counts + 1e-6))
+        exploration_bonus = 3 * np.sqrt(np.log(self._total_steps + 1) / (self._counts + 1e-6))
         ucb_values = means + exploration_bonus
         return np.argmax(ucb_values)
 

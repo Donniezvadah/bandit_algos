@@ -1,0 +1,8 @@
+experiment:
+  output_dir: output
+  n_steps: 500
+  n_runs: 20
+  seed: 0
+seeds:
+  numpy: 0
+  random: 0
