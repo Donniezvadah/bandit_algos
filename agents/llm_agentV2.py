@@ -82,29 +82,28 @@ You are an online learning agent in a multi-armed bandit game. Your goal is to m
 Give a probability distribution over the actions. Format your answer strictly as:
 Policy: [p0, p1, ..., p{len(self._rewards) - 1}]
 """
-        try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": "You are a strategic AI minimizing regret in adversarial environments."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.7,
-                max_tokens=150
-            )
-            output = response.choices[0].message.content
-            policy_line = [line for line in output.splitlines() if line.startswith("Policy")][0]
-            policy_str = policy_line.split("[", 1)[1].split("]")[0]
-            probs = np.array([float(x.strip()) for x in policy_str.split(',')])
-            probs /= probs.sum()  # normalize
-            action = np.random.choice(len(probs), p=probs)
-            return action
-
-        except Exception as e:
-            print(f"LLM fallback due to error: {e}")
-            means = self._rewards / (self._counts + 1e-6)
-            bonus = np.sqrt(2 * np.log(len(self._action_history) + 1) / (self._counts + 1e-6))
-            return int(np.argmax(means + bonus))
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": "You are a strategic AI minimizing regret in adversarial environments."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=150
+        )
+        
+        output = response.choices[0].message.content
+        policy_line = [line for line in output.splitlines() if line.startswith("Policy")][0]
+        policy_str = policy_line.split("[", 1)[1].split("]")[0]
+        probs = np.array([float(x.strip()) for x in policy_str.split(',')])
+        probs = np.maximum(probs, 0)  # Ensure no negative probabilities
+        probs = probs / (probs.sum() + 1e-6)  # Normalize with small epsilon for numerical stability
+        
+        if np.any(np.isnan(probs)) or np.any(probs < 0) or abs(probs.sum() - 1.0) > 1e-6:
+            raise ValueError(f"Invalid probability distribution generated: {probs}")
+            
+        action = np.random.choice(len(probs), p=probs)
+        return action
 
     def update(self, action, reward):
         self._rewards[action] += reward
