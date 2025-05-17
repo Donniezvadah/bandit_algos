@@ -3,6 +3,7 @@ from openai import OpenAI
 from .base_agent import BaseAgent
 import time
 import os
+import re
 
 class LLMAgent(BaseAgent):
     """
@@ -127,18 +128,24 @@ Return only the action number (0-{len(self._rewards)-1}) and a brief explanation
             # Parse response to get action
             response_text = response.choices[0].message.content
             print(f"Response text: {response_text}")
+            action = None
             try:
-                action = int(response_text.split()[0])  # Get first number in response
-                print(f"Parsed action: {action}")
-            except (ValueError, IndexError) as e:
+                # Find all integers in the response
+                matches = re.findall(r"\\b\\d+\\b", response_text)
+                if matches:
+                    action = int(matches[0])
+                    print(f"Parsed action: {action}")
+                else:
+                    raise ValueError("No integer found in response")
+            except Exception as e:
                 print(f"Warning: Could not parse action from response: {response_text}")
                 print(f"Parse error: {e}")
-                action = np.argmin(self._counts)  # Fallback to least tried action
+                action = int(np.argmin(self._counts))  # Fallback to least tried action
             
             # Validate action
             if not (0 <= action < len(self._rewards)):
                 print(f"Warning: Invalid action {action} received from LLM")
-                action = np.argmin(self._counts)  # Fallback to least tried action
+                action = int(np.argmin(self._counts))  # Fallback to least tried action
             
             return action
             

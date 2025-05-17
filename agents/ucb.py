@@ -63,3 +63,4 @@ class UCBAgent(BaseAgent):
     def name(self):
         """Returns the name of the agent."""
         return self._name
+    
