@@ -1,8 +1,8 @@
 experiment:
   output_dir: output
-  n_steps: 1000
+  n_steps: 25
   n_runs: 10
-  seed: 5353
+  seed: 42
 seeds:
-  numpy: 5353
-  random: 5353
+  numpy: 42
+  random: 42

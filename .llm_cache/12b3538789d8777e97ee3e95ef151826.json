@@ -1,1 +1,1 @@
-{"timestamp": 1747497381.134781, "response": "0 # All actions have the same average reward, but action 0 has been tried once with a reward of 1.00, so exploiting it is reasonable.", "model": "gpt-4.1-nano", "temperature": 0.3}
+{"timestamp": 1747563536.546653, "response": "0 # All actions have the same average reward, but action 0 has been tried once and has a known reward of 1.0, so exploiting it is reasonable.", "model": "gpt-4.1-nano", "temperature": 0}
