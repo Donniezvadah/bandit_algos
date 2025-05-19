@@ -468,10 +468,10 @@ Contributions are welcome! Please follow these steps:
 5. Create a Pull Request
 
 ## Contributors
-Donald Zvada
-Maxime Heuillet
-Audrey Durand
-Kudziedevs
+- Donald Zvada
+- Maxime Heuillet
+- Audrey Durand
+- Kudziedevs
 
 ## License
 
