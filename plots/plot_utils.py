@@ -29,6 +29,7 @@ def plot_regret_with_confidence(agents, regret, confidence_intervals, config, en
             'UCB': {'color': '#ff7f0e', 'linestyle': '-', 'linewidth': 2},
             'ThompsonSampling': {'color': '#2ca02c', 'linestyle': '-', 'linewidth': 2},
             'KL-UCB': {'color': '#d62728', 'linestyle': '-', 'linewidth': 2},
+            'GradientBandit': {'color': '#9467bd', 'linestyle': '-', 'linewidth': 2},  # Purple color for gradient bandit
             # LLM agents (red dotted lines)
             'LLM': {'color': 'red', 'linestyle': ':', 'linewidth': 2.5},
             'LLMV2': {'color': 'red', 'linestyle': ':', 'linewidth': 2.5},

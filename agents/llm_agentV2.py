@@ -10,7 +10,7 @@ class LLMAgent(BaseAgent):
     Implements regret tracking, softmax policy, and importance-weighted updates for bandit feedback.
     """
 
-    def __init__(self, api_key=None, model="gpt-4"):  # Using gpt-4 for better reasoning
+    def __init__(self, api_key=None, model="gpt-4.1-nano"):  # Use a strong model for strategic reasoning
         super().__init__("LLM")
         self.model = model
         self._rewards = None
@@ -18,7 +18,7 @@ class LLMAgent(BaseAgent):
         self._action_history = []
         self._reward_history = []
         self._regret_history = []
-        self._context_window = 20  # Increased context window for better pattern recognition
+        self._context_window = 10
 
         if api_key is None:
             try:
@@ -46,70 +46,29 @@ class LLMAgent(BaseAgent):
         self._regret_history = []
 
     def _get_context_prompt(self):
-        total_rounds = len(self._action_history)
-        context = []
-        
-        # Basic information
-        context.append(f"You are playing a multi-armed bandit game with {len(self._rewards)} arms.")
-        context.append(f"Current round: {total_rounds + 1}\n")
-        
-        # If first round
         if not self._action_history:
-            context.append("This is the first round. Explore the arms to learn their rewards.")
-            return "\n".join(context)
-            
-        # Calculate statistics for each arm
-        arm_stats = []
-        for arm in range(len(self._rewards)):
-            mask = np.array(self._action_history) == arm
-            if np.any(mask):
-                rewards = np.array(self._reward_history)[mask]
-                arm_stats.append({
-                    'arm': arm,
-                    'count': np.sum(mask),
-                    'total_reward': np.sum(rewards),
-                    'avg_reward': np.mean(rewards),
-                    'last_pulled': len(self._action_history) - np.where(mask)[0][-1] - 1 if np.any(mask) else float('inf'),
-                    'ucb': np.mean(rewards) + np.sqrt(2 * np.log(total_rounds) / np.sum(mask)) if np.sum(mask) > 0 else float('inf')
-                })
+            return "First round. You are given multiple arms. Return a probability distribution over actions."
+
+        recent_actions = self._action_history[-self._context_window:]
+        recent_rewards = self._reward_history[-self._context_window:]
+        context = "Round history:\n"
+        for i, (a, r) in enumerate(zip(recent_actions, recent_rewards)):
+            context += f"Round {i+1}: Action {a}, Reward {r:.2f}\n"
+
+        action_stats = np.zeros(len(self._rewards))
+        counts = np.zeros(len(self._rewards))
+        for a, r in zip(recent_actions, recent_rewards):
+            action_stats[a] += r
+            counts[a] += 1
+
+        context += "\nAverages:\n"
+        for i in range(len(self._rewards)):
+            if counts[i] > 0:
+                context += f"Action {i}: Avg Reward = {action_stats[i] / counts[i]:.2f} (tried {int(counts[i])} times)\n"
             else:
-                arm_stats.append({
-                    'arm': arm,
-                    'count': 0,
-                    'total_reward': 0,
-                    'avg_reward': 0,
-                    'last_pulled': float('inf'),
-                    'ucb': float('inf')
-                })
-        
-        # Sort by UCB score (Upper Confidence Bound)
-        arm_stats.sort(key=lambda x: x['ucb'], reverse=True)
-        
-        # Build context
-        context.append("Arm Statistics (sorted by potential):")
-        context.append("Arm |  Count  |  Total Reward  |  Avg Reward  |  Last Pulled  |  UCB Score")
-        context.append("-" * 80)
-        
-        for stat in arm_stats:
-            context.append(
-                f"{stat['arm']:>3} | "
-                f"{stat['count']:>7} | "
-                f"{stat['total_reward']:>13.2f} | "
-                f"{stat['avg_reward']:>11.2f} | "
-                f"{stat['last_pulled']:>12} | "
-                f"{stat['ucb']:>9.2f}"
-            )
-        
-        # Add recent history
-        context.append("\nRecent History (last 5 actions):")
-        recent_history = list(zip(
-            self._action_history[-5:],
-            [f"{r:.2f}" for r in self._reward_history[-5:]]
-        ))
-        for i, (a, r) in enumerate(recent_history, 1):
-            context.append(f"Round {total_rounds - len(recent_history) + i}: Arm {a} → Reward {r}")
-        
-        return "\n".join(context)
+                context += f"Action {i}: Not tried yet\n"
+
+        return context
 
     def get_action(self):
         if self._rewards is None or self._counts is None:
@@ -117,28 +76,19 @@ class LLMAgent(BaseAgent):
 
         context = self._get_context_prompt()
         prompt = f"""
-You are an advanced multi-armed bandit learning agent. Your goal is to maximize cumulative reward by balancing exploration and exploitation.
-
+You are an online learning agent in a multi-armed bandit game. Your goal is to minimize regret.
 {context}
 
-Guidelines:
-1. Favor arms with higher UCB scores (balance of average reward and exploration bonus)
-2. Consider how recently each arm was pulled
-3. Maintain some exploration probability for less-tried arms
-4. Focus more on promising arms (high average reward with sufficient trials)
-
-Return a probability distribution over the arms. The sum must be exactly 1.0.
-Format your response exactly as:
+Give a probability distribution over the actions. Format your answer strictly as:
 Policy: [p0, p1, ..., p{len(self._rewards) - 1}]
-
-Example: Policy: [0.1, 0.6, 0.2, 0.1]"""
+"""
         response = self.client.chat.completions.create(
             model=self.model,
             messages=[
                 {"role": "system", "content": "You are a strategic AI minimizing regret in adversarial environments."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.3,  # Lower temperature for more consistent decisions
+            temperature=0.7,
             max_tokens=150
         )
         

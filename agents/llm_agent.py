@@ -19,7 +19,7 @@ class LLMAgent(BaseAgent):
     """
 
     def __init__(self, api_key: str = None, model: str = "gpt-4.1-nano", 
-                 temperature: float = 0.0, max_retries: int = 3, 
+                 temperature: float = 0.3, max_retries: int = 3, 
                  timeout: int = 30, cache_dir: str = '.llm_cache'):
         """
         Initialize the LLM agent with enhanced error handling and caching.

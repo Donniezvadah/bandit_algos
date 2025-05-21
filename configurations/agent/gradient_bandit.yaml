@@ -1,0 +1,9 @@
+gradient_bandit:
+  alpha: 0.1  # Step size parameter
+  baseline: true  # Whether to use average reward as baseline
+
+# The Gradient Bandit agent uses a softmax policy with gradient ascent.
+# It maintains preferences for each action and updates them based on received rewards.
+# Parameters:
+#   - alpha: Controls the step size of the gradient update (higher = faster learning)
+#   - baseline: If true, uses the average reward as a baseline to reduce variance
