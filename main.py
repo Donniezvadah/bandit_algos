@@ -177,8 +177,8 @@ def main():
             GaussianUCBAgent(n_arms=len(means)),
             GaussianThompsonSamplingAgent(n_arms=len(means)),
             GradientBanditAgent(alpha=0.1, baseline=True),
-            LLMAgent(model="gpt-4.1-nano"),
-            LLMAgentV2(model="gpt-4.1-nano")
+            LLMAgent(model="o4-mini"),
+            LLMAgentV2(model="o4-mini")
         ]
         print(f"Updated agents for Gaussian environment")
         

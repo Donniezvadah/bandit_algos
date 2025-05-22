@@ -1,6 +1,6 @@
-horizon: 1000
-n_arms: 5
-n_runs: 3
+horizon: 25
+n_arms: 2
+n_runs: 10
 seed: 42
 
-bernoulli_agent_names: [epsilon_greedy, ucb, thompson_sampling, kl_ucb, llm_agentV2]
+bernoulli_agent_names: [epsilon_greedy, ucb, thompson_sampling, kl_ucb, llm_agent, gradient_bandit]

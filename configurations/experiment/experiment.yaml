@@ -1,9 +1,56 @@
+# Base experiment configuration
 experiment:
   output_dir: output
-  n_steps: 10
-  n_runs: 10
+  n_steps: 25  # Increased for better statistical significance
+  n_runs: 10     # Increased for better confidence intervals
   seed: 5353
+
+# Environment configurations
+environments:
+  # Bernoulli environments
+  bernoulli_easy:
+    name: bernoulli
+    probabilities: [0.1, 0.9]  # Easy case: well-separated probabilities
+    seed: 42
+    
+  bernoulli_hard:
+    name: bernoulli
+    probabilities: [0.4, 0.6]  # Hard case: close probabilities
+    seed: 42
+    
+  # Gaussian environments
+  gaussian_easy:
+    name: gaussian
+    means: [0.2, 0.8]    # Well-separated means
+    stds: [0.1, 0.1]     # Low variance
+    seed: 42
+    
+  gaussian_hard:
+    name: gaussian
+    means: [0.4, 0.6]    # Close means
+    stds: [0.2, 0.2]     # Higher variance to make it more challenging
+    seed: 42
+
+# Agent configurations (example - you can add more agents as needed)
+agents:
+  - name: epsilon_greedy
+    epsilon: 0.1
+    
+  - name: thompson_sampling
+    
+  - name: ucb
+    alpha: 1.0
+    
+  - name: gradient_bandit
+    step_size: 0.1
+
+# Seeds for reproducibility
 seeds:
   numpy: 5353
   random: 5353
   torch: 5353
+
+# Experiment parameters
+parameters:
+  # You can add any additional experiment parameters here
+  confidence_level: 0.95  # For confidence intervals

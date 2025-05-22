@@ -26,10 +26,20 @@ class BaseAgent(ABC):
         self.rewards[action] += reward
         self.counts[action] += 1
         
+    def reset(self):
+        """Reset the agent's internal state."""
+        if hasattr(self, 'action_count') and self.action_count is not None:
+            self.rewards = np.zeros(self.action_count)
+            self.counts = np.zeros(self.action_count)
+    
     @property
     def name(self):
         """Get the name of the agent."""
         return self._name 
     
+    # Alias for get_action to maintain compatibility with existing code
+    def choose_action(self):
+        """Alias for get_action to maintain compatibility with existing code."""
+        return self.get_action()
     
     ## This is a comment
