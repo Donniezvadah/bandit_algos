@@ -338,7 +338,7 @@ If you use this library in your research, please cite:
 
 ```bibtex
 @software{bandit_algorithms_2023,
-  author = {Your Name},
+  author = {Donald Zvada},
   title = {Advanced Multi-Armed Bandit Algorithms},
   year = {2023},
   publisher = {GitHub},
