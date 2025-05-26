@@ -349,4 +349,4 @@ If you use this library in your research, please cite:
 
 ## 📞 Contact
 
-For questions or feedback, please open an issue or contact [your-email@example.com](mailto:your-email@example.com).
+For questions or feedback, please open an issue or contact
