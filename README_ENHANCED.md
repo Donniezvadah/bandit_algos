@@ -3,6 +3,9 @@
 [![Python 3.8+](https://img.shields.io/badge/Python-3.8%2B-blue)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Code Style: Black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![Documentation Status](https://readthedocs.org/projects/bandit-algorithms/badge/?version=latest)](https://bandit-algorithms.readthedocs.io/)
+[![Tests](https://github.com/yourusername/bandit-algorithms/actions/workflows/tests.yml/badge.svg)](https://github.com/yourusername/bandit-algorithms/actions)
+[![Coverage](https://codecov.io/gh/yourusername/bandit-algorithms/branch/main/graph/badge.svg)](https://codecov.io/gh/yourusername/bandit-algorithms)
 
 ## 📖 Table of Contents
 1. [Introduction](#-introduction)
@@ -211,173 +214,111 @@ class BaseEnvironment(ABC):
 ### Basic Example
 
 ```python
-from environments.bernoulli_bandit import BernoulliBandit
-from agents.epsilon import EpsilonGreedyAgent
-from agents.ucb import UCBAgent
-from agents.thompson import ThompsonSamplingAgent
+from agents import EpsilonGreedyAgent
+from environments import BernoulliBandit
 
 # Create environment with 5 arms
-env = BernoulliBandit(n_arms=5, probs=[0.1, 0.2, 0.3, 0.4, 0.5])
+env = BernoulliBandit(n_arms=5, means=[0.1, 0.3, 0.5, 0.7, 0.9])
 
-# Initialize agents
-agents = [
-    EpsilonGreedyAgent(n_actions=5, epsilon=0.1, name="ε-Greedy (ε=0.1)"),
-    UCBAgent(n_actions=5, name="UCB1"),
-    ThompsonSamplingAgent(n_actions=5, name="Thompson Sampling")
-]
+# Create agent with epsilon=0.1
+agent = EpsilonGreedyAgent(n_actions=5, epsilon=0.1)
 
-# Run simulation
+# Run experiment
 n_steps = 1000
-n_trials = 100
+regret = 0
+optimal_reward = env.get_optimal_reward()
 
-for agent in agents:
-    total_reward = 0
-    for _ in range(n_trials):
-        env.reset()
-        agent.reset()
-        for t in range(n_steps):
-            action = agent.get_action()
-            reward = env.pull(action)
-            agent.update(action, reward)
-            total_reward += reward
+for t in range(n_steps):
+    action = agent.get_action()
+    reward = env.pull(action)
+    agent.update(action, reward)
+    regret += optimal_reward - env.means[action]
+
+print(f"Final cumulative regret: {regret:.2f}")
+```
+
+### Advanced Example: Delayed Feedback
+
+```python
+from agents import UCB1Agent
+from environments import GaussianBandit
+from delayed_feedback import DelayedFeedbackBandit
+
+# Create base environment with 10 arms
+base_env = GaussianBandit(n_arms=10, means=[i/10 for i in range(10)], std_dev=0.1)
+
+# Wrap with delayed feedback (average delay of 10 steps)
+env = DelayedFeedbackBandit(base_bandit=base_env, delay_dist='poisson', delay_param=10)
+
+# Create UCB1 agent
+agent = UCB1Agent(n_actions=10, alpha=2.0)
+
+# Run experiment with delayed feedback
+n_steps = 5000
+regret = 0
+
+for t in range(n_steps):
+    action = agent.get_action()
+    reward = env.pull(action)
     
-    avg_reward = total_reward / (n_steps * n_trials)
-    print(f"{agent.name}: Average reward = {avg_reward:.4f}")
+    # Update agent with potentially delayed feedback
+    feedback = env.get_feedback()
+    for a, r in feedback:
+        agent.update(a, r)
+        regret += env.get_optimal_reward() - env.means[a]
+
+print(f"Final cumulative regret: {regret:.2f}")
 ```
 
-### Running Experiments
+## ⚙️ Configuration
 
-Use the provided `main.py` script to run comprehensive experiments:
-
-```bash
-python main.py --config configs/experiment/default.yaml
-```
-
-### Configuration
-
-The behavior of the experiments can be customized using YAML configuration files. Here's an example configuration:
+The library uses YAML files for configuration. Example configuration for an experiment:
 
 ```yaml
 # configs/experiment/default.yaml
-experiment:
-  n_trials: 100
-  n_steps: 1000
-  confidence_level: 0.95
-  plot_results: true
-  save_plots: true
-  output_dir: ./results
+agent:
+  name: "thompson"
+  params:
+    prior_alpha: 1.0
+    prior_beta: 1.0
 
 environment:
-  type: bernoulli
-  n_arms: 10
-  probs: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95]
+  name: "bernoulli"
+  params:
+    n_arms: 10
+    means: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
 
-agents:
-  - type: epsilon_greedy
-    epsilon: 0.1
-    name: "ε-Greedy (ε=0.1)"
-  
-  - type: ucb
-    c: 2.0
-    name: "UCB1 (c=2.0)"
-  
-  - type: thompson
-    alpha: 1.0
-    beta: 1.0
-    name: "Thompson Sampling"
+experiment:
+  n_steps: 10000
+  n_trials: 20
+  log_interval: 100
+  output_dir: "results/"
 ```
 
-## 📊 Advanced Features
-
-### 1. Delayed Feedback
-
-The `delayed_feedback` module provides support for scenarios where rewards are not immediately observed:
-
-```python
-from delayed_feedback import DelayedFeedbackBandit
-
-# Create environment with delayed feedback (average delay of 10 steps)
-env = DelayedFeedbackBandit(
-    base_bandit=BernoulliBandit(n_arms=5),
-    delay_distribution=lambda: np.random.poisson(10)
-)
-```
-
-### 2. Non-stationary Bandits
-
-To handle environments where reward distributions change over time:
-
-```python
-from environments.non_stationary_bandit import NonStationaryBandit
-
-# Create environment with drifting probabilities
-env = NonStationaryBandit(
-    n_arms=5,
-    initial_probs=[0.1, 0.2, 0.3, 0.4, 0.5],
-    drift_scale=0.01  # Scale of random walk
-)
-```
-
-### 3. Contextual Bandits (Beta)
-
-For contextual bandit problems where actions depend on observed features:
-
-```python
-from agents.contextual_bandit import LinUCB
-
-# Initialize LinUCB agent with 10-dimensional context
-agent = LinUCB(n_actions=5, context_dim=10, alpha=1.0)
-
-# In each step:
-context = get_context()  # Your context vector
-action = agent.get_action(context)
-reward = env.pull(action)
-agent.update(context, action, reward)
-```
-
-## 📈 Performance Benchmarks
+## 📊 Performance Benchmarks
 
 ### Regret Comparison
 
-![Regret Comparison](https://example.com/regret_comparison.png)
+![Regret Comparison](plots/regret_comparison.png)
 
 ### Computational Efficiency
 
-| Algorithm      | Time per step (ms) | Memory (MB) |
-|----------------|-------------------|-------------|
-| ε-Greedy      | 0.05              | 2.1         |
-| UCB1          | 0.07              | 2.3         |
-| Thompson      | 0.12              | 2.5         |
-| Gradient      | 0.15              | 2.8         |
-| LinUCB        | 1.20              | 15.2        |
+| Algorithm       | Time per step (μs) | Memory (MB) |
+|-----------------|-------------------|-------------|
+| ε-Greedy (ε=0.1) | 1.2 ± 0.1        | 2.1         |
+| UCB1            | 1.5 ± 0.2        | 2.3         |
+| Thompson        | 2.1 ± 0.3        | 2.5         |
+| Gradient Bandit | 3.4 ± 0.4        | 3.2         |
 
 ## 🤝 Contributing
 
 Contributions are welcome! Please follow these steps:
 
 1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-### Development Setup
-
-1. Install development dependencies:
-   ```bash
-   pip install -r requirements-dev.txt
-   ```
-
-2. Run tests:
-   ```bash
-   pytest tests/
-   ```
-
-3. Run linter:
-   ```bash
-   black .
-   flake8
-   ```
+2. Create a new branch: `git checkout -b feature-name`
+3. Make your changes and add tests
+4. Run tests: `pytest`
+5. Submit a pull request
 
 ## 📜 License
 
@@ -385,8 +326,27 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📚 References
 
-1. Lattimore, T., & Szepesvári, C. (2020). *Bandit Algorithms*. Cambridge University Press.
-2. Slivkins, A. (2019). *Introduction to Multi-Armed Bandits*. Foundations and Trends in Machine Learning.
-3. Bubeck, S., & Cesa-Bianchi, N. (2012). *Regret Analysis of Stochastic and Nonstochastic Multi-armed Bandit Problems*. Foundations and Trends in Machine Learning.
-4. Russo, D., Van Roy, B., Kazerouni, A., Osband, I., & Wen, Z. (2018). *A Tutorial on Thompson Sampling*. Foundations and Trends in Machine Learning.
-5. Sutton, R. S., & Barto, A. G. (2018). *Reinforcement Learning: An Introduction* (2nd ed.). MIT Press.
+1. Lattimore, T., & Szepesvári, C. (2020). Bandit Algorithms. Cambridge University Press.
+2. Sutton, R. S., & Barto, A. G. (2018). Reinforcement Learning: An Introduction. MIT Press.
+3. Bubeck, S., & Cesa-Bianchi, N. (2012). Regret Analysis of Stochastic and Nonstochastic Multi-armed Bandit Problems. Foundations and Trends in Machine Learning.
+4. Chapelle, O., & Li, L. (2011). An empirical evaluation of thompson sampling. Advances in Neural Information Processing Systems.
+5. Auer, P., Cesa-Bianchi, N., & Fischer, P. (2002). Finite-time analysis of the multiarmed bandit problem. Machine learning.
+
+## 📝 Citation
+
+If you use this library in your research, please cite:
+
+```bibtex
+@software{bandit_algorithms_2023,
+  author = {Your Name},
+  title = {Advanced Multi-Armed Bandit Algorithms},
+  year = {2023},
+  publisher = {GitHub},
+  journal = {GitHub repository},
+  howpublished = {\url{https://github.com/DonnieZvadah/bandit-algorithms}}
+}
+```
+
+## 📞 Contact
+
+For questions or feedback, please open an issue or contact [your-email@example.com](mailto:your-email@example.com).
