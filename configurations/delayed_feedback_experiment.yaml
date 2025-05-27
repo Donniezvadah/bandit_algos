@@ -6,5 +6,5 @@ experiment:
   horizon: 5
   seed: 42
 
-bernoulli_agent_names: [epsilon_greedy, ucb, thompson_sampling, kl_ucb, llm_agentV2]
-gaussian_agent_names: [gaussian_epsilon_greedy, gaussian_ucb, gaussian_thompson_sampling, llm_agentV2] 
+bernoulli_agent_names: [epsilon_greedy, ucb, thompson_sampling, kl_ucb, llm_agent]
+gaussian_agent_names: [gaussian_epsilon_greedy, gaussian_ucb, gaussian_thompson_sampling, llm_agent]

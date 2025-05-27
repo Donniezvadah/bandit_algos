@@ -1,4 +1,5 @@
 # bandits/epsilon.py
+from typing import Optional, Union
 import numpy as np
 from .base_agent import BaseAgent
 
@@ -8,7 +9,7 @@ class EpsilonGreedyAgent(BaseAgent):
     with probability 1-epsilon.
     """
 
-    def __init__(self, epsilon=0.01, environment_type='bernoulli'):
+    def __init__(self, epsilon: float = 0.01, environment_type: str = 'bernoulli'):
         """
         Initializes the EpsilonGreedyAgent.
 
@@ -20,12 +21,14 @@ class EpsilonGreedyAgent(BaseAgent):
         if not (0 <= epsilon <= 1):
             raise ValueError("Epsilon must be between 0 and 1")
         self._epsilon = epsilon
-        self._successes = None
-        self._failures = None
+        self._successes: Optional[np.ndarray] = None
+        self._failures: Optional[np.ndarray] = None
+        self.rewards: Optional[np.ndarray] = None
+        self.counts: Optional[np.ndarray] = None
         self.environment_type = environment_type
-        self.t = 0  # Add time step counter
+        self.t: int = 0  # Time step counter
 
-    def init_actions(self, n_actions):
+    def init_actions(self, n_actions: int) -> None:
         """
         Initializes the agent's internal state.
 
@@ -36,11 +39,13 @@ class EpsilonGreedyAgent(BaseAgent):
         if self.environment_type == 'bernoulli':
             self._successes = np.zeros(n_actions)
             self._failures = np.zeros(n_actions)
-        else:  # gaussian
+        elif self.environment_type == 'gaussian':
             self.rewards = np.zeros(n_actions)
             self.counts = np.zeros(n_actions)
+        else:
+            raise ValueError(f"Unsupported environment type: {self.environment_type}")
 
-    def get_action(self):
+    def get_action(self) -> int:
         """
         Chooses an action based on the epsilon-greedy strategy.
 
@@ -48,32 +53,44 @@ class EpsilonGreedyAgent(BaseAgent):
             int: The index of the chosen action.
         """
         self.t += 1  # Increment time step
+        
         if self.environment_type == 'bernoulli':
             if self._successes is None or self._failures is None:
                 raise ValueError("Agent has not been initialized. Call init_actions() first.")
+            
             # Decaying epsilon: epsilon = 1/sqrt(t)
             current_epsilon = min(1.0, 1.0 / np.sqrt(self.t))
+            
             if np.random.random() < current_epsilon:
                 return np.random.randint(len(self._successes))
-            else:
-                q_values = self._successes / (self._successes + self._failures + 1e-6)
-                return np.argmax(q_values)
+            
+            # Calculate Q-values with proper handling of zero counts
+            total_counts = self._successes + self._failures
+            q_values = np.where(total_counts > 0,
+                              self._successes / total_counts,
+                              np.zeros_like(self._successes))
+            return np.argmax(q_values)
+            
         else:  # gaussian
             if self.rewards is None or self.counts is None:
                 raise ValueError("Agent has not been initialized. Call init_actions() first.")
+            
             if np.random.random() < self._epsilon:
                 return np.random.randint(len(self.rewards))
-            else:
-                q_values = self.rewards / (self.counts + 1e-6)
-                return np.argmax(q_values)
+            
+            # Calculate Q-values with proper handling of zero counts
+            q_values = np.where(self.counts > 0,
+                              self.rewards / self.counts,
+                              np.zeros_like(self.rewards))
+            return np.argmax(q_values)
 
-    def update(self, action, reward):
+    def update(self, action: int, reward: Union[int, float]) -> None:
         """
         Updates the agent's internal state based on the action taken and reward received.
 
         Args:
             action (int): The action that was taken.
-            reward (float): The reward received.
+            reward (Union[int, float]): The reward received.
         """
         if self.environment_type == 'bernoulli':
             if reward == 1:
@@ -81,9 +98,12 @@ class EpsilonGreedyAgent(BaseAgent):
             else:
                 self._failures[action] += 1
         else:  # gaussian
-            super().update(action, reward)
+            if self.rewards is None or self.counts is None:
+                raise ValueError("Agent has not been initialized. Call init_actions() first.")
+            self.rewards[action] += reward
+            self.counts[action] += 1
 
     @property
-    def name(self):
+    def name(self) -> str:
         """Returns the name of the agent, including the epsilon value and environment type."""
         return f"{self._name}(epsilon={self._epsilon}, {self.environment_type})"

@@ -1,3 +1,11 @@
+# Bernoulli environment configuration
 name: bernoulli
-probabilities: [0.1, 0.3, 0.5, 0.7, 0.9]
-seed: 42 
+n_arms: 10
+seed: 42
+environment:
+  bernoulli:
+    name: bernoulli
+    n_arms: 10
+    seed: 42
+    easy_range: [0.1, 0.3]
+    hard_range: [0.7, 0.9] 

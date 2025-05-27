@@ -4,50 +4,51 @@ import time
 import os
 import re
 import json
-import hashlib
 from typing import Dict, List, Tuple, Optional, Any, Union
 from datetime import datetime, timedelta
-from functools import lru_cache
 
 from openai import OpenAI, APIError, APITimeoutError, RateLimitError
 from .base_agent import BaseAgent
+
+from typing import Optional, List, Tuple
+import numpy as np
 
 class LLMAgent(BaseAgent):
     """
     An agent that uses OpenAI API to make decisions in the bandit environment.
     This agent maintains a history of actions and rewards to provide context to the LLM.
+    The agent uses its own reasoning capabilities to balance exploration and exploitation
+    based on the history of actions and their outcomes.
     """
 
-    def __init__(self, api_key: str = None, model: str = "o4-mini", 
-                 temperature: float = 1.0, max_retries: int = 3, 
-                 timeout: int = 30, cache_dir: str = '.llm_cache'):
+    def __init__(self, api_key: Optional[str] = None, model: str = "gpt-4.1-nano", 
+                 temperature: float = 0.0, max_retries: int = 3, 
+                 timeout: int = 30, max_history_length: int = 100):
         """
-        Initialize the LLM agent with enhanced error handling and caching.
+        Initialize the LLM agent.
         
         Args:
             api_key: OpenAI API key. If None, will try to get from llm_api.txt.
-            model: The model to use. Default is "o4-mini".
+            model: The model to use. Default is "gpt-4.1-nano".
             temperature: Controls randomness in the response (0-1).
             max_retries: Maximum number of retries for API calls.
             timeout: Timeout in seconds for API calls.
-            cache_dir: Directory to store API response caches (not used in this version).
+            max_history_length: Maximum length of action/reward history to keep.
         """
         super().__init__("LLM")
         self.model = model
-        # For o4-mini, temperature must be 1.0
-        if model == "o4-mini":
-            self.temperature = 1.0
-        else:
-            self.temperature = max(0, min(1, temperature))  # Clamp between 0 and 1 for other models
+        self.temperature = max(0, min(1, temperature))  # Clamp between 0 and 1
         self.max_retries = max(1, max_retries)
         self.timeout = max(5, timeout)  # Minimum 5 second timeout
+        self.max_history_length = max(1, max_history_length)
         
         # Initialize state
-        self._rewards = None
-        self._counts = None
-        self._action_history = []
-        self._reward_history = []
-        self._context_window = 20  # Increased context window
+        self._rewards: Optional[np.ndarray] = None
+        self._counts: Optional[np.ndarray] = None
+        self._successes: Optional[np.ndarray] = None
+        self._failures: Optional[np.ndarray] = None
+        self._action_history: List[int] = []
+        self._reward_history: List[float] = []
         self._last_api_call = 0
         self._min_call_interval = 0.1  # 100ms between API calls to avoid rate limiting
         
@@ -57,22 +58,27 @@ class LLMAgent(BaseAgent):
                 with open('llm_api.txt', 'r') as f:
                     api_key = f.read().strip()
             except FileNotFoundError:
-                raise ValueError("API key not provided and llm_api.txt not found")
-        
-        if not api_key:
-            raise ValueError("API key is empty. Please provide a valid OpenAI API key.")
+                print("Warning: API key not provided and llm_api.txt not found.")
+                raise ValueError("API key is required for LLMAgent")
         
         self.api_key = api_key
-        self.client = OpenAI(api_key=self.api_key)
+        self.client: Optional[OpenAI] = None
         
-        # Test the API connection
-        self._test_connection()
+        try:
+            self.client = OpenAI(api_key=self.api_key)
+            # Test the API connection
+            self._test_connection()
+        except Exception as e:
+            print(f"Error initializing OpenAI client: {e}")
+            raise
 
     def reset(self):
         """Reset the agent's internal state."""
         if hasattr(self, 'action_count') and self.action_count is not None:
             self._rewards = np.zeros(self.action_count)
             self._counts = np.zeros(self.action_count)
+            self._successes = np.zeros(self.action_count)
+            self._failures = np.zeros(self.action_count)
         self._action_history = []
         self._reward_history = []
     
@@ -86,83 +92,124 @@ class LLMAgent(BaseAgent):
         super().init_actions(n_actions)
         self._rewards = np.zeros(n_actions)
         self._counts = np.zeros(n_actions)
+        self._successes = np.zeros(n_actions)
+        self._failures = np.zeros(n_actions)
         self._action_history = []
         self._reward_history = []
     
-    def _throttle_api_calls(self):
+    def _throttle_api_calls(self) -> None:
         """Ensure we don't exceed API rate limits."""
         elapsed = time.time() - self._last_api_call
         if elapsed < self._min_call_interval:
             time.sleep(self._min_call_interval - elapsed)
         self._last_api_call = time.time()
+        
+    def _handle_api_error(self, error: Exception, attempt: int) -> None:
+        """Handle API errors with appropriate backoff strategy."""
+        if isinstance(error, RateLimitError):
+            print(f"Rate limit exceeded. Waiting for {2 ** attempt} seconds...")
+            time.sleep(2 ** attempt)
+        elif isinstance(error, (APIError, APITimeoutError)):
+            print(f"API error occurred: {str(error)}. Retrying in {2 ** attempt} seconds...")
+            time.sleep(2 ** attempt)
+        else:
+            print(f"Unexpected error: {str(error)}")
+            raise error
     
-    def _test_connection(self):
+    def _test_connection(self) -> None:
         """Test the API connection with retries."""
         for attempt in range(self.max_retries):
             try:
                 self._throttle_api_calls()
                 self.client.models.list()
                 return  # Success
-            except (APIError, APITimeoutError, RateLimitError) as e:
+            except Exception as e:
+                self._handle_api_error(e, attempt)
                 if attempt == self.max_retries - 1:
                     raise ValueError(f"Failed to connect to OpenAI API after {self.max_retries} attempts: {str(e)}")
-                time.sleep(2 ** attempt)  # Exponential backoff
     
     def _get_context_prompt(self) -> str:
-        """Generate a detailed context prompt with complete history of loss vectors."""
+        """
+        Generate a detailed context prompt with action history and statistics.
+        
+        Returns:
+            Formatted context string for the LLM
+        """
         if not self._action_history:
             return "This is the first action. You should explore different actions to learn their reward probabilities."
         
         n_actions = len(self._rewards)
+        total_steps = len(self._action_history)
         
-        # Calculate loss vectors for each step
-        # Loss = 1 - reward (since rewards are in [0,1])
-        loss_vectors = []
-        for a, r in zip(self._action_history, self._reward_history):
-            loss_vec = [1.0] * n_actions  # Initialize with maximum loss
-            loss_vec[a] = 1.0 - r  # Actual loss for the taken action
-            loss_vectors.append(loss_vec)
-        
-        # Generate context with complete history
-        context = """You are playing a multi-armed bandit game with sequential decisions.
-At each step, you choose an action and observe a loss (1 - reward).
-Your goal is to minimize the cumulative loss over time.
-
-Available actions: {}
-
-Complete history of loss vectors (step: [loss_action_0, loss_action_1, ...]):
-""".format(list(range(n_actions)))
-        
-        # Add all loss vectors
-        for t, loss_vec in enumerate(loss_vectors, 1):
-            formatted_losses = [f"{l:.3f}" for l in loss_vec]
-            context += f"Step {t}: [{', '.join(formatted_losses)}]\n"
-        
-        # Add statistics about each action
-        action_counts = np.bincount(self._action_history, minlength=n_actions)
-        action_avg_loss = np.ones(n_actions)  # Initialize with max loss
-        
+        # Calculate statistics for each action
+        action_stats = []
         for a in range(n_actions):
-            if action_counts[a] > 0:
-                # Calculate average loss for this action
-                action_rewards = [r for act, r in zip(self._action_history, self._reward_history) if act == a]
-                action_avg_loss[a] = 1.0 - (sum(action_rewards) / len(action_rewards))
-        
-        context += "\nAction statistics (count, average loss):\n"
-        for a in range(n_actions):
-            if action_counts[a] > 0:
-                context += f"Action {a}: chosen {action_counts[a]} times, avg loss = {action_avg_loss[a]:.3f}\n"
+            if self._counts[a] > 0:
+                rewards = [r for act, r in zip(self._action_history, self._reward_history) if act == a]
+                mean_reward = np.mean(rewards)
+                std_reward = np.std(rewards, ddof=1) if len(rewards) > 1 else 0
+                success_rate = self._successes[a] / self._counts[a] if self._counts[a] > 0 else 0
+                action_stats.append({
+                    'action': a,
+                    'count': int(self._counts[a]),
+                    'successes': int(self._successes[a]),
+                    'failures': int(self._failures[a]),
+                    'mean_reward': mean_reward,
+                    'std_reward': std_reward,
+                    'success_rate': success_rate
+                })
             else:
-                context += f"Action {a}: never chosen (unknown loss)\n"
+                action_stats.append({
+                    'action': a,
+                    'count': 0,
+                    'successes': 0,
+                    'failures': 0,
+                    'mean_reward': None,
+                    'std_reward': None,
+                    'success_rate': None
+                })
+        
+        # Generate context
+        context = f"""You are an advanced decision-making AI playing a multi-armed bandit game with {n_actions} actions.
+Your goal is to minimize cumulative regret by choosing actions that maximize expected reward.
+
+Current statistics (step {total_steps}):
+"""
+        
+        # Add action statistics
+        context += "\nAction Statistics:"
+        context += "\n| Action | Count | Successes | Failures | Mean Reward | Std Dev | Success Rate |"
+        context += "\n|--------|-------|-----------|----------|-------------|---------|--------------|"
+        
+        for stats in action_stats:
+            if stats['count'] > 0:
+                context += f"\n| {stats['action']:6d} | {stats['count']:5d} | {stats['successes']:9d} | {stats['failures']:8d} | {stats['mean_reward']:.4f}    | {stats['std_reward']:.4f}  | {stats['success_rate']:.4f}    |"
+            else:
+                context += f"\n| {stats['action']:6d} |     0 |         0 |        0 |      ?.????    |   ?.????  |      ?.????    |"
+        
+        # Add recent history
+        context += "\n\nRecent History (last 5 steps):\n"
+        context += "| Step | Action | Reward |\n"
+        context += "|------|--------|--------|\n"
+        
+        # Calculate actual step numbers
+        total_steps = len(self._action_history)
+        for i in range(max(0, len(self._action_history)-5), len(self._action_history)):
+            actual_step = total_steps - (len(self._action_history) - i)
+            context += f"| {actual_step:4d} | {self._action_history[i]:6d} | {self._reward_history[i]:.4f} |\n"
         
         # Add guidance
         context += """
+
 Guidance:
-- Your goal is to minimize the cumulative loss over time.
-- You should balance exploration (trying actions with uncertain losses) with exploitation (choosing actions with known low losses).
-- Consider both the average loss and the number of times each action has been tried when making decisions.
-- Remember that the loss for untried actions is unknown (shown as 1.0).
-"""
+1. Your goal is to minimize cumulative regret by maximizing expected reward.
+2. Consider both the mean reward and uncertainty (std dev) of each action.
+3. Balance exploration (trying actions with high uncertainty) with exploitation (choosing actions with high mean rewards).
+4. For untried actions, consider exploring them to gather more information.
+5. Look for patterns in the recent history that might indicate changes in reward distributions.
+6. Use the success rate and failure counts to assess the reliability of each action.
+
+Please respond with just the action number (0-{}) that you think will minimize regret.""".format(n_actions-1)
         
         return context
 
@@ -174,16 +221,18 @@ Guidance:
             prompt: The prompt to send to the LLM.
             
         Returns:
-            The response text from the LLM.
+            The LLM's response as a string.
             
         Raises:
-            RuntimeError: If all retry attempts fail.
+            ValueError: If the API key is invalid or API connection fails.
+            RuntimeError: If the API response is invalid or unexpected.
         """
-        # Prepare messages - no caching to ensure fresh responses each time
+        if self.client is None:
+            raise RuntimeError("LLM client not initialized")
+            
+        # Prepare messages
         messages = [
-            {"role": "system", "content": """You are an expert at playing multi-armed bandit games. 
-            Your goal is to maximize the cumulative reward by balancing exploration and exploitation.
-            Consider the entire history of actions and rewards when making your decision."""},
+            {"role": "system", "content": "You are an AI assistant that helps with decision making in multi-armed bandit problems. Respond with just the action number."},
             {"role": "user", "content": prompt}
         ]
         
@@ -192,206 +241,139 @@ Guidance:
         for attempt in range(self.max_retries):
             try:
                 self._throttle_api_calls()
-                print(f"Calling OpenAI API (attempt {attempt + 1}/{self.max_retries}) with model: {self.model}")
                 
                 response = self.client.chat.completions.create(
                     model=self.model,
                     messages=messages,
                     temperature=self.temperature,
-                    max_completion_tokens=100,  # Updated for o4-mini compatibility
+                    max_completion_tokens=50,
                     timeout=self.timeout
                 )
                 
-                response_text = response.choices[0].message.content.strip()
-                print(f"API Response: {response_text[:100]}...")  # Log first 100 chars
-                
-                # Don't cache the response to ensure the LLM learns from each run
-                return response_text
-                
+                # Extract the response text
+                if response.choices and len(response.choices) > 0:
+                    return response.choices[0].message.content.strip()
+                else:
+                    raise ValueError("Empty response from LLM")
+                    
             except (APIError, APITimeoutError, RateLimitError) as e:
                 last_error = e
-                wait_time = (2 ** attempt) + (random.random() * 0.5)  # Add jitter
-                print(f"API error (attempt {attempt + 1}/{self.max_retries}): {str(e)}")
-                print(f"Retrying in {wait_time:.1f} seconds...")
-                time.sleep(wait_time)
+                if attempt == self.max_retries - 1:
+                    raise RuntimeError(f"Failed after {self.max_retries} attempts: {str(e)}")
+                time.sleep(2 ** attempt)  # Exponential backoff
+                
             except Exception as e:
                 last_error = e
-                print(f"Unexpected error (attempt {attempt + 1}/{self.max_retries}): {str(e)}")
-                break
+                if attempt == self.max_retries - 1:
+                    raise RuntimeError(f"Unexpected error after {self.max_retries} attempts: {str(e)}")
+                time.sleep(1)  # Shorter delay for non-rate-limit errors
         
-        # If we get here, all retries failed
-        raise RuntimeError(f"Failed to get response from LLM after {self.max_retries} attempts: {str(last_error)}")
-
-    def _parse_action_from_response(self, response_text: str) -> int:
+        raise RuntimeError(f"Failed to get response from LLM: {str(last_error)}")
+    
+    def _parse_llm_response(self, response: str) -> int:
         """
-        Parse the action from the LLM response.
+        Parse the LLM's response to extract the chosen action.
         
         Args:
-            response_text: The raw response text from the LLM.
+            response: Raw response from the LLM
             
         Returns:
-            The parsed action index.
-            
-        Raises:
-            ValueError: If no valid action can be parsed.
+            The chosen action (0 to n_actions-1) or None if parsing fails
         """
-        if not response_text or not response_text.strip():
-            raise ValueError("Empty response from LLM")
+        if not response:
+            return None
             
-        # Clean and normalize the response text
-        response_text = response_text.strip().lower()
-        print(f"Parsing response: {response_text}")
+        # Clean the response
+        response = response.strip()
         
-        # Try to find action in various formats
+        # Look for patterns like "Action X" or "Choose X"
         patterns = [
-            r'action\s*(\d+)',  # "action 1"
-            r'select\s*action\s*(\d+)',  # "select action 1"
-            r'choose\s*action\s*(\d+)',  # "choose action 1"
-            r'\b(\d+)\b',  # Just a number
-            r'"action"\s*:\s*(\d+)',  # JSON-like: "action": 1
-            r'"action"\s*:\s*"(\d+)"',  # JSON-like: "action": "1"
-            r'action\s*=\s*(\d+)',  # "action=1" or "action = 1"
-            r'choice\s*[=:]?\s*(\d+)',  # "choice: 1" or "choice=1"
-            r'\[\s*\d+\s*,\s*(\d+)\s*\]',  # [0, 1, 2] - pick the first number
-            r'\b(?:option|action|choice)\s*[#:]?\s*(\d+)\b',  # "option 1", "action: 2", "choice #3"
-            r'\b(?:i choose|i select|i pick|selecting|choosing)\s*(?:action\s*)?(\d+)\b',  # "I choose action 1"
+            r'action\s*(\d+)',
+            r'choose\s*(\d+)',
+            r'select\s*(\d+)',
+            r'\b(\d+)\b'  # Any number
         ]
         
-        # First, try to find a number that's a valid action index
         for pattern in patterns:
-            try:
-                matches = re.findall(pattern, response_text, re.IGNORECASE)
-                for match in matches:
-                    try:
-                        action = int(match)
-                        if 0 <= action < len(self._rewards):
-                            print(f"Parsed action {action} from pattern: {pattern}")
-                            return action
-                    except (ValueError, IndexError):
-                        continue
-            except Exception as e:
-                print(f"Error with pattern {pattern}: {str(e)}")
-                continue
-        
-        # If no pattern matched, try to extract any number that could be a valid action
-        numbers = re.findall(r'\d+', response_text)
-        for num in numbers:
-            try:
-                action = int(num)
-                if 0 <= action < len(self._rewards):
-                    print(f"Extracted action {action} from number in response")
-                    return action
-            except (ValueError, IndexError):
-                continue
-        
-        # Try to find a policy distribution
-        try:
-            policy_match = re.search(r'\[([^\]]+)\]', response_text)
-            if policy_match:
-                probs = []
-                for x in policy_match.group(1).split(','):
-                    x = x.strip()
-                    if x.replace('.', '').isdigit():
-                        probs.append(float(x))
-                
-                if probs and len(probs) == len(self._rewards):
-                    probs = np.array(probs)
-                    probs = np.maximum(probs, 0)
-                    if np.sum(probs) > 0:
-                        probs = probs / np.sum(probs)
-                        action = np.random.choice(len(probs), p=probs)
-                        print(f"Sampled action {action} from policy distribution")
+            match = re.search(pattern, response, re.IGNORECASE)
+            if match:
+                try:
+                    action = int(match.group(1))
+                    if 0 <= action < self.action_count:
                         return action
-        except Exception as e:
-            print(f"Error parsing policy distribution: {str(e)}")
+                except (ValueError, IndexError):
+                    continue
         
-        # If we still don't have an action, try to find the first valid number in the response
-        for word in response_text.split():
-            try:
-                action = int(word)
-                if 0 <= action < len(self._rewards):
-                    print(f"Found valid action {action} in response")
-                    return action
-            except (ValueError, IndexError):
-                continue
-        
-        # If all else fails, look for any number that could be a valid action index
-        for i in range(len(self._rewards)):
-            if str(i) in response_text:
-                print(f"Found action {i} mentioned in response")
-                return i
-        
-        raise ValueError(f"Could not parse action from response: {response_text}")
-
-    def get_action(self) -> int:
+        return None
+    
+    def choose_action(self) -> int:
         """
-        Choose an action using the LLM.
-        
-        Returns:
-            int: The index of the chosen action.
-            
-        Raises:
-            ValueError: If the agent is not initialized or if the LLM response is invalid.
-            RuntimeError: If there are issues with the LLM API calls.
+        Choose an action using the LLM's reasoning capabilities.
+        The agent uses its history and statistics to make informed decisions.
         """
-        if self._rewards is None or self._counts is None:
-            raise ValueError("Agent not initialized. Call init_actions() first.")
-        
-        # Generate prompt with detailed context
-        context = self._get_context_prompt()
-        prompt = f"""{context}
-        
-        Based on the above information, which action would you choose? 
-        
-        INSTRUCTIONS:
-        1. You MUST respond with a SINGLE INTEGER between 0 and {len(self._rewards)-1}, inclusive.
-        2. The integer should be the index of the action you want to take.
-        3. Example valid responses: '0', '1', '2', etc.
-        
-        Your response (just the number, e.g., '2'): """
+        if self._rewards is None or self.action_count == 0:
+            return np.random.randint(0, self.action_count)
         
         try:
-            # Get response from LLM
-            response_text = self._call_llm_api(prompt)
+            # Prepare context for the LLM
+            context = self._get_context_prompt()
             
-            # Parse the action from the response
-            action = self._parse_action_from_response(response_text)
+            # Call the LLM
+            response = self._call_llm_api(context)
             
-            # Update history
-            self._action_history.append(action)
+            # Parse the response to get the chosen action
+            action = self._parse_llm_response(response)
             
-            return action
-            
+            # Ensure the action is valid
+            if action is not None and 0 <= action < self.action_count:
+                return action
+                
         except Exception as e:
-            # Fallback to random action if there's an error
-            print(f"Error getting action from LLM: {str(e)}. Falling back to random action.")
-            action = np.random.randint(len(self._rewards))
-            self._action_history.append(action)
-            return action
+            print(f"Error in LLM decision making: {e}")
+            # If all else fails, choose randomly
+            return np.random.randint(0, self.action_count)
     
-    def update(self, action, reward):
-        """
-        Update the agent's internal state based on the action taken and reward received.
-        
-        Args:
-            action (int): The action that was taken.
-            reward (float): The reward received.
-        """
-        if self._rewards is None or self._counts is None:
-            return
+    def update(self, action: int, reward: float) -> None:
+        """Update the agent's knowledge based on the action taken and reward received."""
+        if self._counts is None or self._rewards is None or self._successes is None or self._failures is None:
+            raise RuntimeError("Agent not initialized. Call init_actions() first.")
             
-        # Update counts and rewards
+        self._rewards[action] += reward
         self._counts[action] += 1
-        n = self._counts[action]
-        self._rewards[action] = ((n - 1) * self._rewards[action] + reward) / n
+        
+        # Update successes and failures
+        if reward > 0:
+            self._successes[action] += 1
+        else:
+            self._failures[action] += 1
+        
+        # Use incremental update for numerical stability
+        if self._counts[action] == 1:
+            self._rewards[action] = reward
+        else:
+            # Update the mean incrementally
+            self._rewards[action] += (reward - self._rewards[action]) / self._counts[action]
         
         # Update history
-        if len(self._reward_history) < len(self._action_history):
-            self._reward_history.append(reward)
-        else:
-            self._reward_history[-1] = reward
+        self._action_history.append(action)
+        self._reward_history.append(reward)
+        
+        # Trim history if it gets too large
+        if len(self._action_history) > 1000:  # Keep last 1000 steps
+            self._action_history = self._action_history[-1000:]
+            self._reward_history = self._reward_history[-1000:]
     
     @property
     def name(self):
-        """Returns the name of the agent."""
-        return f"LLM ({self.model})"
+        """Return the name of the agent."""
+        return f"LLM ({self.model}, temp={self.temperature})"
+
+    def get_action(self) -> int:
+        """
+        Required method from the abstract base class.
+        This is an alias for choose_action to maintain compatibility.
+        
+        Returns:
+            int: The index of the chosen action.
+        """
+        return self.choose_action()

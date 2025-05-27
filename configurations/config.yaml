@@ -1,7 +1,42 @@
-defaults:
-  - experiment: experiment
-  - agent: epsilon_greedy
-  - environment: bernoulli_env 
-paths:
-  plots_dir: plots
-  output_dir: output 
+# Main configuration file for bandit experiments
+
+# Random seeds for reproducibility
+seeds:
+  numpy: 42
+
+# Experiment settings
+experiment:
+  n_steps: 1000  # Number of steps per trial
+  n_runs: 100    # Number of trials to run
+  confidence_levels: [0.95, 0.99]  # Confidence levels for intervals
+
+# Environment settings
+environment:
+  bernoulli:
+    name: bernoulli
+    n_arms: 10  # Number of arms
+    seed: 42
+  gaussian:
+    name: gaussian
+    n_arms: 10  # Number of arms
+    seed: 42
+
+# Agent settings
+agents:
+  - name: epsilon_greedy
+    epsilon: 0.1
+  - name: ucb
+    c: 2.0  # Exploration parameter
+  - name: thompson_sampling
+  - name: gradient_bandit
+    alpha: 0.1
+    baseline: true
+
+# Output settings
+output:
+  results_dir: "results"
+  plots_dir: "plots"
+  save_results: true
+  save_plots: true
+  plot_format: "png"
+  dpi: 300 

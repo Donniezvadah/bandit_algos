@@ -1,6 +1,10 @@
+# Epsilon-greedy agent configuration
+agent:
+  epsilon_greedy:
+    epsilon: 0.1
+    environment_type: bernoulli  # or gaussian
 name: epsilon_greedy
 n_arms: 5
-epsilon: 0.1
 decay:
   enabled: true
   type: exponential  # or 'linear'

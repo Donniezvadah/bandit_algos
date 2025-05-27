@@ -1,4 +1,12 @@
+# Gaussian environment configuration
 name: gaussian
-means: [0.0, 0.5, 1.0, 1.5, 2.0]
-stds: [1.0, 1.0, 1.0, 1.0, 1.0]
-seed: 42 
+n_arms: 10
+seed: 42
+environment:
+  gaussian:
+    name: gaussian
+    n_arms: 10
+    seed: 42
+    easy_range: [0.1, 0.3]
+    hard_range: [0.7, 0.9]
+    std: 0.1  # Standard deviation for all arms 

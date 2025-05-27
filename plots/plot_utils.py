@@ -8,6 +8,29 @@ import matplotlib as mpl
 def get_base_agent_name(agent):
     return getattr(agent, '_name', str(agent).split('(')[0])
 
+def plot_regret_with_confidence(agents, regrets, intervals, config, env_type):
+    """Plot regret with confidence intervals for all agents."""
+    plt.figure(figsize=(12, 8))
+    for agent in agents:
+        agent_name = agent.name
+        print(f"Plotting for agent: {agent_name}")
+        print(f"Regrets shape: {regrets[agent_name].shape}")
+        print(f"Intervals keys: {intervals[agent_name].keys()}")
+        mean_regret = np.mean(regrets[agent_name], axis=0)
+        std_regret = np.std(regrets[agent_name], axis=0)
+        steps = np.arange(1, len(mean_regret) + 1)
+        plt.plot(steps, mean_regret, label=agent_name)
+        plt.fill_between(steps, mean_regret - std_regret, mean_regret + std_regret, alpha=0.2)
+    plt.xlabel('Steps')
+    plt.ylabel('Cumulative Regret')
+    plt.title(f'Cumulative Regret over Time ({env_type} Environment)')
+    plt.legend()
+    plt.grid(True)
+    plot_path = os.path.join(config['output']['plots_dir'], f'regret_{env_type.lower()}.png')
+    plt.savefig(plot_path)
+    print(f"Plot saved to {plot_path}")
+    plt.close()
+
 def plot_regret_with_confidence(agents, regret, confidence_intervals, config, env_name):
     """
     Plot regret with confidence intervals and save to plots directory.
@@ -29,14 +52,9 @@ def plot_regret_with_confidence(agents, regret, confidence_intervals, config, en
             'UCB': {'color': '#ff7f0e', 'linestyle': '-', 'linewidth': 2},
             'ThompsonSampling': {'color': '#2ca02c', 'linestyle': '-', 'linewidth': 2},
             'KL-UCB': {'color': '#d62728', 'linestyle': '-', 'linewidth': 2},
-            'GradientBandit': {'color': '#9467bd', 'linestyle': '-', 'linewidth': 2},  # Purple color for gradient bandit
+            'GradientBandit': {'color': '#9467bd', 'linestyle': '-', 'linewidth': 2},
             # LLM agents (red dotted lines)
             'LLM': {'color': 'red', 'linestyle': ':', 'linewidth': 2.5},
-            'LLMV2': {'color': 'red', 'linestyle': ':', 'linewidth': 2.5},
-            # Gaussian variants (solid lines with same colors as base agents)
-            'GaussianEpsilonGreedy': {'color': '#1f77b4', 'linestyle': '-', 'linewidth': 2},
-            'GaussianUCB': {'color': '#ff7f0e', 'linestyle': '-', 'linewidth': 2},
-            'GaussianThompsonSampling': {'color': '#2ca02c', 'linestyle': '-', 'linewidth': 2},
         }
         
         # Fallback style for unknown agents
@@ -55,8 +73,6 @@ def plot_regret_with_confidence(agents, regret, confidence_intervals, config, en
             # For LLM agents, use red dotted style
             if 'LLM' in agent.name or 'llm' in agent.name.lower():
                 style = agent_styles.get('LLM', default_style)
-                # Force red color and dotted line for all LLM agents
-                style = {'color': 'red', 'linestyle': ':', 'linewidth': 2.5}
             
             avg_regret = np.mean(regret[agent.name], axis=0)
             print(f"Average regret shape: {avg_regret.shape}")
@@ -94,12 +110,11 @@ def plot_regret_with_confidence(agents, regret, confidence_intervals, config, en
         
         plt.xlabel('Steps', fontsize=12)
         plt.ylabel('Cumulative Regret', fontsize=12)
-        plt.title(f'Average Cumulative Regret with Upper Confidence Intervals - {env_name} Environment', fontsize=14)
+        plt.title(f'Average Cumulative Regret with Confidence Intervals - {env_name} Environment', fontsize=14)
         plt.grid(True, linestyle='--', alpha=0.7)
-        plt.legend(fontsize=10)
         
         # Create plots directory if it doesn't exist
-        plots_dir = config['paths']['plots_dir']
+        plots_dir = config['output']['plots_dir']
         os.makedirs(plots_dir, exist_ok=True)
         
         # Save plots with environment name in filename

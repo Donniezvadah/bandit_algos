@@ -1,6 +1,11 @@
-gradient_bandit:
-  alpha: 0.1  # Step size parameter
-  baseline: true  # Whether to use average reward as baseline
+# Gradient Bandit agent configuration
+name: gradient_bandit
+n_arms: 5
+seed: 42
+agent:
+  gradient_bandit:
+    alpha: 0.1  # Step size parameter
+    baseline: true  # Whether to use average reward as baseline
 
 # The Gradient Bandit agent uses a softmax policy with gradient ascent.
 # It maintains preferences for each action and updates them based on received rewards.

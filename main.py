@@ -16,66 +16,114 @@ from agents.gaussian_epsilon_greedy import GaussianEpsilonGreedyAgent
 from agents.gaussian_ucb import GaussianUCBAgent
 from agents.gaussian_thompson_sampling import GaussianThompsonSamplingAgent
 from agents.ucb_kl import KLUCBAgent
-from agents.llm_agentV2 import LLMAgent as LLMAgentV2
+
 from agents.gradient_bandit import GradientBanditAgent
 
-def load_config():
+def load_config() -> tuple[dict, dict, dict]:
     """
     Load configuration from YAML files using OmegaConf.
-    Returns a merged configuration dictionary.
+    
+    Returns:
+        tuple: (merged_config, bernoulli_env_cfg, gaussian_env_cfg)
+            - merged_config: Merged configuration dictionary
+            - bernoulli_env_cfg: Bernoulli environment configuration
+            - gaussian_env_cfg: Gaussian environment configuration
     """
     try:
-        # Load the main config file
-        config = OmegaConf.load('configurations/config.yaml')
-        # Load experiment config
-        experiment_cfg = OmegaConf.load('configurations/experiment/experiment.yaml')
-        # Load agent config (default: epsilon_greedy)
-        agent_cfg = OmegaConf.load('configurations/agent/epsilon_greedy.yaml')
-        # Load both environment configs
-        bernoulli_env_cfg = OmegaConf.load('configurations/environment/bernoulli_env.yaml')
-        gaussian_env_cfg = OmegaConf.load('configurations/environment/gaussian_env.yaml')
+        config_files = [
+            'configurations/config.yaml',
+            'configurations/experiment/experiment.yaml',
+            'configurations/agent/epsilon_greedy.yaml',
+            'configurations/environment/bernoulli_env.yaml',
+            'configurations/environment/gaussian_env.yaml'
+        ]
+        
+        configs = []
+        for file in config_files:
+            try:
+                cfg = OmegaConf.load(file)
+                configs.append(cfg)
+            except FileNotFoundError:
+                print(f"Warning: Configuration file {file} not found")
+                configs.append(OmegaConf.create())
+            except Exception as e:
+                print(f"Error loading configuration file {file}: {e}")
+                raise
+                
         # Merge all configs (default: Bernoulli)
-        merged = OmegaConf.merge(config, experiment_cfg, agent_cfg, bernoulli_env_cfg)
-        return OmegaConf.to_container(merged, resolve=True), bernoulli_env_cfg, gaussian_env_cfg
+        merged = OmegaConf.merge(*configs)
+        merged_dict = OmegaConf.to_container(merged, resolve=True)
+        
+        # Validate required fields
+        required_fields = ['experiment', 'environment', 'agent']
+        for field in required_fields:
+            if field not in merged_dict:
+                raise ValueError(f"Missing required configuration field: {field}")
+                
+        return merged_dict, configs[3], configs[4]
+        
     except Exception as e:
         print(f"Error loading YAML configuration: {e}")
         sys.exit(1)
 
-def run_simulation(env, agent, n_steps, n_trials, confidence_levels):
-    """Run the bandit simulation with a single agent."""
+def run_simulation(
+    env, agent, n_steps: int, n_trials: int, confidence_levels: list[float]
+) -> tuple[np.ndarray, np.ndarray, list[tuple[float, float]], list[tuple[float, float]]]:
+    """
+    Run the bandit simulation with a single agent.
+    
+    Args:
+        env: The bandit environment
+        agent: The bandit agent
+        n_steps: Number of steps per trial
+        n_trials: Number of trials to run
+        confidence_levels: List of confidence levels for intervals
+        
+    Returns:
+        tuple: (regrets, cumulative_regrets, regret_intervals, cumulative_regret_intervals)
+            - regrets: Array of regrets for each trial and step
+            - cumulative_regrets: Array of cumulative regrets for each trial and step
+            - regret_intervals: List of confidence intervals for regrets
+            - cumulative_regret_intervals: List of confidence intervals for cumulative regrets
+    """
+    if not isinstance(n_steps, int) or n_steps <= 0:
+        raise ValueError("n_steps must be a positive integer")
+    if not isinstance(n_trials, int) or n_trials <= 0:
+        raise ValueError("n_trials must be a positive integer")
+    if not all(0 < cl <= 1 for cl in confidence_levels):
+        raise ValueError("Confidence levels must be between 0 and 1")
+    
     print(f"\nStarting simulation for {agent.name}...")
     regrets = np.zeros((n_trials, n_steps))
     cumulative_regrets = np.zeros((n_trials, n_steps))
     
     for trial in range(n_trials):
-        print(f"\nTrial {trial + 1}/{n_trials}")
-        
-        # Reset environment and agent
-        env.reset()
-        agent.init_actions(env.action_count)
-        
-        # Run simulation
-        for step in range(n_steps):
-            # Get action from agent
-            action = agent.get_action()
+        try:
+            print(f"\nTrial {trial + 1}/{n_trials}")
+            env.reset()
+            agent.reset()
             
-            # Get reward from environment
-            reward = env.pull(action)
+            for t in range(n_steps):
+                action = agent.get_action()
+                reward = env.step(action)
+                agent.update(action, reward)
+                
+                # Calculate regret
+                optimal_reward = env.max_reward()
+                regrets[trial, t] = optimal_reward - reward
+                if t > 0:
+                    cumulative_regrets[trial, t] = cumulative_regrets[trial, t-1] + regrets[trial, t]
+                else:
+                    cumulative_regrets[trial, t] = regrets[trial, t]
+                    
+            # Print trial summary
+            avg_regret = np.mean(regrets[trial])
+            avg_cumulative_regret = np.mean(cumulative_regrets[trial])
+            print(f"Trial {trial + 1} complete. Average regret: {avg_regret:.4f}, Average cumulative regret: {avg_cumulative_regret:.4f}")
             
-            # Print detailed debugging information
-            print(f"Step {step + 1}/{n_steps}")
-            print(f"Action: {action}")
-            print(f"Reward: {reward}")
-            if isinstance(agent, EpsilonGreedyAgent):
-                print(f"Agent state - Successes: {agent._successes}, Failures: {agent._failures}")
-            elif isinstance(agent, UCBAgent):
-                print(f"Agent state - Rewards: {agent._rewards}, Counts: {agent._counts}")
-            elif isinstance(agent, ThompsonSamplingAgent):
-                print(f"Agent state - Successes: {agent._successes}, Failures: {agent._failures}")
-            elif isinstance(agent, LLMAgent):
-                print(f"Agent state - Rewards: {agent._rewards}, Counts: {agent._counts}")
-            
-            # Update agent
+        except Exception as e:
+            print(f"Error during trial {trial + 1}: {e}")
+            continue
             agent.update(action, reward)
             
             # Calculate regret
@@ -123,8 +171,7 @@ def main():
             KLUCBAgent(n_arms=len(probs)),
             ThompsonSamplingAgent(environment_type='bernoulli'),
             GradientBanditAgent(alpha=0.1, baseline=True),
-            LLMAgent(model="gpt-4.1-nano"),
-            LLMAgentV2(model="gpt-4.1-nano")
+            LLMAgent(model="gpt-4.1-nano")
         ]
         print(f"Initialized {len(agents)} agents")
         
@@ -177,8 +224,7 @@ def main():
             GaussianUCBAgent(n_arms=len(means)),
             GaussianThompsonSamplingAgent(n_arms=len(means)),
             GradientBanditAgent(alpha=0.1, baseline=True),
-            LLMAgent(model="o4-mini"),
-            LLMAgentV2(model="o4-mini")
+            LLMAgent(model="o4-mini")
         ]
         print(f"Updated agents for Gaussian environment")
         
